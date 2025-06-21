@@ -1,11 +1,11 @@
 // Global variables
-let currentMode = 'starter';
+let currentMode = 'next_code';
 let currentLanguage = 'python';
 let currentProblem = null;
 let currentCode = '';
 
 // DOM elements
-const starterBtn = document.getElementById('starter-btn');
+const nextCodeBtn = document.getElementById('starter-btn');
 const hintBtn = document.getElementById('hint-btn');
 const languageSelect = document.getElementById('language-select');
 const getAssistanceBtn = document.getElementById('get-assistance-btn');
@@ -34,97 +34,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         languageSelect.value = currentLanguage;
     }
 
-    // Get current problem info
+    // Get current problem info and code
     await updateProblemInfo();
     
     // Set up event listeners
     setupEventListeners();
 });
 
+// Update UI elements
+function updateModeButtons() {
+    nextCodeBtn.classList.toggle('active', currentMode === 'next_code');
+    hintBtn.classList.toggle('active', currentMode === 'hint');
+    nextCodeBtn.textContent = '🚀 Next Step';
+    hintBtn.textContent = '💡 Get Hint';
+}
+
 // Set up event listeners
 function setupEventListeners() {
-    // Mode selection
-    starterBtn.addEventListener('click', () => setMode('starter'));
-    hintBtn.addEventListener('click', () => setMode('hint'));
-    
-    // Language selection
+    nextCodeBtn.addEventListener('click', () => {
+        currentMode = 'next_code';
+        chrome.storage.local.set({ mode: currentMode });
+        updateModeButtons();
+    });
+
+    hintBtn.addEventListener('click', () => {
+        currentMode = 'hint';
+        chrome.storage.local.set({ mode: currentMode });
+        updateModeButtons();
+    });
+
     languageSelect.addEventListener('change', (e) => {
         currentLanguage = e.target.value;
         chrome.storage.local.set({ language: currentLanguage });
     });
-    
-    // Action buttons
+
     getAssistanceBtn.addEventListener('click', getAssistance);
     copyBtn.addEventListener('click', copyResponse);
     clearBtn.addEventListener('click', clearResponse);
 }
 
-// Set mode
-async function setMode(mode) {
-    currentMode = mode;
-    updateModeButtons();
-    
-    // Save preference
-    await chrome.storage.local.set({ mode: mode });
-    
-    // Clear previous response
-    clearResponse();
-}
-
-// Update mode button states
-function updateModeButtons() {
-    starterBtn.classList.toggle('active', currentMode === 'starter');
-    hintBtn.classList.toggle('active', currentMode === 'hint');
-}
-
-// Get current problem information from LeetCode page
+// Get current problem info and code from LeetCode
 async function updateProblemInfo() {
     try {
+        // Query the active tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        if (tab.url && tab.url.includes('leetcode.com/problems/')) {
-            // Extract problem info from URL
-            const urlParts = tab.url.split('/');
-            const problemSlug = urlParts[urlParts.length - 1];
-            
-            // Get problem details from content script
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                action: 'getProblemInfo'
-            });
-            
-            if (response && response.success) {
-                currentProblem = {
-                    title: response.title,
-                    description: response.description,
-                    slug: problemSlug
-                };
-                
-                problemTitle.textContent = currentProblem.title;
-                problemDescription.textContent = currentProblem.description || 'Problem description not available';
-                getAssistanceBtn.disabled = false;
-            } else {
-                // Fallback to URL-based detection
-                currentProblem = {
-                    title: problemSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    description: 'Problem description not available',
-                    slug: problemSlug
-                };
-                
-                problemTitle.textContent = currentProblem.title;
-                problemDescription.textContent = 'Problem description not available';
-                getAssistanceBtn.disabled = false;
-            }
-        } else {
-            currentProblem = null;
-            problemTitle.textContent = 'No problem detected';
-            problemDescription.textContent = 'Navigate to a LeetCode problem to get started';
+        if (!tab.url.includes('leetcode.com/problems/')) {
+            problemTitle.textContent = 'Not a LeetCode problem page';
+            problemDescription.textContent = 'Please navigate to a LeetCode problem';
             getAssistanceBtn.disabled = true;
+            return;
+        }
+
+        // Ensure content script is injected
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content/content.js']
+            });
+        } catch (err) {
+            console.log('Content script already injected or injection failed:', err);
+        }
+
+        // Wait a bit for the page to be fully loaded
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Inject content script to get problem info and code
+        const result = await chrome.tabs.sendMessage(tab.id, { action: 'getProblemInfo' })
+            .catch(err => {
+                throw new Error('Could not connect to LeetCode page. Please refresh the page and try again.');
+            });
+        
+        if (result?.success) {
+            currentProblem = result.data;
+            problemTitle.textContent = currentProblem.title;
+            problemDescription.textContent = currentProblem.description;
+            currentCode = result.data.code || '';
+            getAssistanceBtn.disabled = false;
+        } else {
+            throw new Error(result?.error || 'Failed to get problem info');
         }
     } catch (error) {
-        console.error('Error updating problem info:', error);
-        currentProblem = null;
-        problemTitle.textContent = 'Error detecting problem';
-        problemDescription.textContent = 'Please refresh the page and try again';
+        console.error('Error getting problem info:', error);
+        problemTitle.textContent = 'Error';
+        problemDescription.textContent = error.message;
         getAssistanceBtn.disabled = true;
     }
 }
@@ -142,10 +135,10 @@ async function getAssistance() {
 
     try {
         const requestData = {
-            problem_description: `${currentProblem.title}: ${currentProblem.description}`,
+            problem_name: currentProblem.title,
+            code_so_far: currentCode,
             language: currentLanguage,
-            mode: currentMode,
-            current_code: currentCode
+            mode: currentMode
         };
 
         const response = await fetch('http://localhost:8000/api/assist', {
@@ -176,82 +169,40 @@ async function getAssistance() {
     }
 }
 
-// Display response in the UI
-function displayResponse(response) {
-    responseContent.innerHTML = '';
-    
-    if (currentMode === 'starter') {
-        // Display code template
-        const codeBlock = document.createElement('pre');
-        codeBlock.textContent = response;
-        responseContent.appendChild(codeBlock);
-    } else {
-        // Display hint text
-        const hintText = document.createElement('p');
-        hintText.textContent = response;
-        responseContent.appendChild(hintText);
-    }
-    
-    responseSection.style.display = 'block';
-}
-
-// Copy response to clipboard
-async function copyResponse() {
-    const text = responseContent.textContent;
-    if (!text) return;
-    
-    try {
-        await navigator.clipboard.writeText(text);
-        showSuccess('Copied to clipboard!');
-    } catch (error) {
-        console.error('Error copying response:', error);
-        showError('Failed to copy response');
-    }
-}
-
-// Clear response
-function clearResponse() {
-    responseContent.innerHTML = '<p>Click "Get Assistance" to receive AI-powered guidance.</p>';
-    responseSection.style.display = 'none';
-}
-
-// Set loading state
+// UI helper functions
 function setLoading(isLoading) {
     loading.style.display = isLoading ? 'flex' : 'none';
     getAssistanceBtn.disabled = isLoading;
 }
 
-// Show error message
 function showError(message) {
-    errorMessage.textContent = message;
     error.style.display = 'block';
+    errorMessage.textContent = message;
 }
 
-// Hide error message
 function hideError() {
     error.style.display = 'none';
 }
 
-// Show success message (temporary)
-function showSuccess(message) {
-    const successDiv = document.createElement('div');
-    successDiv.className = 'success-message';
-    successDiv.textContent = message;
-    successDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #48bb78;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 6px;
-        font-size: 14px;
-        z-index: 1000;
-        animation: slideIn 0.3s ease;
-    `;
-    document.body.appendChild(successDiv);
-    
-    setTimeout(() => {
-        successDiv.remove();
-    }, 3000);
+function displayResponse(text) {
+    responseSection.style.display = 'block';
+    responseContent.textContent = text;
+}
+
+function clearResponse() {
+    responseContent.textContent = '';
+    responseSection.style.display = 'none';
+}
+
+async function copyResponse() {
+    try {
+        await navigator.clipboard.writeText(responseContent.textContent);
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = '✓ Copied!';
+        setTimeout(() => {
+            copyBtn.textContent = originalText;
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+    }
 } 
