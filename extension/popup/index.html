@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SensAI Code Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🤖 SensAI</h1>
+            <p>Code Learning Assistant</p>
+        </header>
+
+        <div class="mode-selector">
+            <h3>Select Mode:</h3>
+            <div class="mode-buttons">
+                <button id="starter-btn" class="mode-btn active">
+                    <span class="icon">🚀</span>
+                    Starter Code
+                </button>
+                <button id="hint-btn" class="mode-btn">
+                    <span class="icon">💡</span>
+                    Get Hint
+                </button>
+            </div>
+        </div>
+
+        <div class="language-selector">
+            <h3>Programming Language:</h3>
+            <select id="language-select" class="language-select">
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+                <option value="javascript">JavaScript</option>
+                <option value="cpp">C++</option>
+            </select>
+        </div>
+
+        <div class="problem-info" id="problem-info">
+            <h3>Current Problem:</h3>
+            <p id="problem-title">No problem detected</p>
+            <p id="problem-description">Navigate to a LeetCode problem to get started</p>
+        </div>
+
+        <div class="action-section">
+            <button id="get-assistance-btn" class="primary-btn" disabled>
+                <span class="icon">🎯</span>
+                Get Assistance
+            </button>
+        </div>
+
+        <div class="response-section" id="response-section" style="display: none;">
+            <h3>AI Response:</h3>
+            <div class="response-content" id="response-content">
+                <p>Click "Get Assistance" to receive AI-powered guidance.</p>
+            </div>
+            <div class="response-actions">
+                <button id="copy-btn" class="secondary-btn">
+                    <span class="icon">📋</span>
+                    Copy
+                </button>
+                <button id="clear-btn" class="secondary-btn">
+                    <span class="icon">🗑️</span>
+                    Clear
+                </button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating assistance...</p>
+        </div>
+
+        <div class="error" id="error" style="display: none;">
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

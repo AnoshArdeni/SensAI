@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "SensAI - Code Learning Assistant",
+  "version": "1.0.0",
+  "description": "AI-powered coding hints for LeetCode problems using Google Gemini",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://leetcode.com/*",
+    "http://localhost:8000/*"
+  ],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "SensAI Code Assistant"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/*"],
+      "js": ["content/content.js"]
+    }
+  ]
+} 
