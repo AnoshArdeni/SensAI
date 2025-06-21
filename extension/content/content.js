@@ -1,12 +1,74 @@
 // Content script for LeetCode integration
 console.log('SensAI: Content script loaded');
 
-// Listen for messages from popup
+// Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getProblemInfo') {
-        const problemInfo = extractProblemInfo();
-        sendResponse(problemInfo);
+        try {
+            // Get problem title
+            const titleElement = document.querySelector('[data-cy="question-title"]');
+            const title = titleElement ? titleElement.textContent.trim() : '';
+
+            // Get problem description
+            const descriptionElement = document.querySelector('[data-cy="question-content"]');
+            const description = descriptionElement ? descriptionElement.textContent.trim() : '';
+
+            // Get current code from the editor - try multiple methods
+            let code = '';
+            
+            // Method 1: Try to get from Monaco editor's content
+            const monacoEditor = document.querySelector('.monaco-editor');
+            if (monacoEditor) {
+                // Get all text lines, preserving indentation
+                const lines = monacoEditor.querySelectorAll('.view-line');
+                code = Array.from(lines)
+                    .map(line => {
+                        // Preserve indentation
+                        const indent = line.querySelector('.indent');
+                        const indentSize = indent ? indent.textContent.length : 0;
+                        return ' '.repeat(indentSize) + line.textContent.trim();
+                    })
+                    .join('\n');
+            }
+
+            // Method 2: Fallback - try to get from the textarea if visible
+            if (!code) {
+                const textarea = document.querySelector('textarea.CodeMirror-line');
+                if (textarea) {
+                    code = textarea.value;
+                }
+            }
+
+            // Method 3: Another fallback - try getting from pre-filled template
+            if (!code) {
+                const codeBlock = document.querySelector('[data-cy="code-content"]');
+                if (codeBlock) {
+                    code = codeBlock.textContent;
+                }
+            }
+
+            // Clean up the code
+            code = code.trim()
+                .replace(/^\s*\n/gm, '\n') // Remove empty lines
+                .replace(/\n{3,}/g, '\n\n'); // Reduce multiple newlines to max 2
+
+            sendResponse({
+                success: true,
+                data: {
+                    title,
+                    description,
+                    code
+                }
+            });
+        } catch (error) {
+            console.error('Error getting problem info:', error);
+            sendResponse({
+                success: false,
+                error: error.message
+            });
+        }
     }
+    // Required for async response
     return true;
 });
 
