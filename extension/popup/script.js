@@ -134,6 +134,13 @@ async function getAssistance() {
     clearResponse();
 
     try {
+        console.log('Sending request to backend:', {
+            mode: currentMode,
+            language: currentLanguage,
+            problemTitle: currentProblem.title,
+            codeLength: currentCode.length
+        });
+
         const requestData = {
             problem_name: currentProblem.title,
             code_so_far: currentCode,
@@ -149,20 +156,22 @@ async function getAssistance() {
             body: JSON.stringify(requestData)
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-        }
-
         const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Backend error response:', data);
+            throw new Error(data.detail || `HTTP error! status: ${response.status}`);
+        }
         
         if (data.success) {
+            console.log('Received successful response:', data.response);
             displayResponse(data.response);
         } else {
+            console.error('Backend returned success: false', data);
             throw new Error('Failed to generate assistance');
         }
     } catch (error) {
-        console.error('Error getting assistance:', error);
+        console.error('Full error object:', error);
         showError(`Failed to get assistance: ${error.message}`);
     } finally {
         setLoading(false);
@@ -177,7 +186,14 @@ function setLoading(isLoading) {
 
 function showError(message) {
     error.style.display = 'block';
-    errorMessage.textContent = message;
+    // Format the error message for better readability
+    const formattedMessage = message
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n');
+    errorMessage.innerHTML = formattedMessage.replace(/\n/g, '<br>');
+    errorMessage.style.whiteSpace = 'pre-wrap';
 }
 
 function hideError() {
