@@ -1,170 +1,121 @@
-# SensAI - Code Learning Assistant
+# SensAI - LeetCode Learning Assistant
 
-An AI-powered Chrome extension that provides intelligent coding assistance for LeetCode problems using Google's Gemini AI. The extension offers two modes: **Starter Code** for beginners and **Hints** for advanced learners.
+A Chrome extension powered by Google's Gemini API to help you learn and solve LeetCode problems more effectively.
 
-## 🚀 Features
+## Features
 
-- **Dual Learning Modes**: 
-  - 🚀 **Starter Code**: Provides code templates with helpful comments
-  - 💡 **Get Hint**: Offers strategic guidance and next steps
-- **Multi-Language Support**: Python, Java, JavaScript, C++
-- **Smart Problem Detection**: Automatically detects LeetCode problems
-- **Beautiful UI**: Modern, intuitive interface
-- **Powered by Gemini**: Advanced AI assistance using Google's Gemini Pro
+- **Next Step Mode**: Get step-by-step guidance on how to solve the current problem
+- **Hint Mode**: Receive helpful hints without complete solutions
+- **Multi-Language Support**: Works with:
+  - Python
+  - JavaScript
+  - Java
+  - C++
 
-## 📁 Project Structure
+## Installation
 
-```
-├── backend/           # Backend service files
-│   ├── server.py     # FastAPI server implementation
-│   └── requirements.txt  # Python dependencies
-├── extension/        # Chrome extension files
-│   ├── manifest.json # Extension configuration
-│   ├── popup/       # Extension popup UI
-│   │   ├── index.html
-│   │   ├── styles.css
-│   │   └── script.js
-│   └── content/     # Content scripts
-│       └── content.js
-└── README.md        # Project documentation
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/SensAI.git
+cd SensAI
 ```
 
-## 🛠️ Quick Setup (5 Minutes)
-
-### 1. Backend Setup (2 minutes)
-
+2. Set up the backend:
 ```bash
 cd backend
 pip install -r requirements.txt
-python server.py
 ```
 
-The server will start on `http://localhost:8000`
+3. Configure your Gemini API key:
+   - Create a `.env` file in the backend directory
+   - Add your API key: `GEMINI_API_KEY=your_api_key_here`
 
-### 2. Chrome Extension Setup (3 minutes)
+4. Load the extension in Chrome:
+   - Open Chrome and go to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `extension` directory from this project
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (top right toggle)
-3. Click "Load unpacked" and select the `extension/` folder
-4. The SensAI extension icon should appear in your toolbar
+## Usage
 
-### 3. Test the Extension
-
-1. Go to any LeetCode problem (e.g., https://leetcode.com/problems/two-sum/)
+1. Visit any LeetCode problem page
 2. Click the SensAI extension icon
-3. Select your mode and language
-4. Click "Get Assistance"
+3. Select your preferred mode:
+   - "Next Step" for guided solution steps
+   - "Get Hint" for subtle hints
+4. Choose your programming language
+5. Click "Get Assistance"
 
-## 🔧 Environment Setup
+## Project Structure
 
-### Create .env file
-
-Create a `.env` file in the `backend/` directory:
-
-```env
-GEMINI_API_KEY=your-gemini-api-key-here
+```
+SensAI/
+├── backend/
+│   ├── server.py         # Flask server handling Gemini API requests
+│   └── requirements.txt  # Python dependencies
+├── extension/
+│   ├── manifest.json     # Extension configuration
+│   ├── popup/
+│   │   ├── popup.html   # Extension popup interface
+│   │   ├── styles.css   # Popup styling
+│   │   └── script.js    # Popup functionality
+│   └── content/
+│       └── content.js   # LeetCode page interaction
+└── README.md
 ```
 
-### Get Gemini API Key
+## Backend API
 
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Copy the key to your `.env` file
+The backend server provides two main endpoints:
 
-## 🎯 How It Works
+- `/next_code`: Generates the next logical step in solving the problem
+- `/hint`: Provides a helpful hint without giving away the solution
 
-### Starter Code Mode
-- Provides code templates with basic structure
-- Includes helpful comments explaining what to implement
-- Gives students a foundation to build upon
-- Does NOT provide the complete solution
+## Development
 
-### Hint Mode
-- Offers strategic guidance for next steps
-- Focuses on problem-solving approach
-- Points out potential issues or improvements
-- Breaks down complex steps into smaller ones
+### Backend Requirements
+- Python 3.8+
+- Flask
+- google-generativeai
+- python-dotenv
 
-## 🧪 Testing
+### Extension Development
+- The extension uses vanilla JavaScript
+- Styling follows a dark theme with orange accents
+- Uses Chrome's Extension Manifest V3
 
-### Manual Testing
-1. Load extension in Chrome
-2. Navigate to LeetCode problems
-3. Test both modes (starter and hint)
-4. Try different programming languages
+## Error Handling
 
-### API Testing
-```bash
-# Test health endpoint
-curl http://localhost:8000/health
+The extension includes robust error handling for:
+- API connection issues
+- Code extraction failures
+- Invalid responses
+- Rate limiting
 
-# Test assistance endpoint
-curl -X POST http://localhost:8000/api/assist \
-  -H "Content-Type: application/json" \
-  -d '{
-    "problem_description": "Two Sum: Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-    "language": "python",
-    "mode": "starter"
-  }'
-```
-
-## 🔒 Security Considerations
+## Security
 
 - API keys are stored server-side only
-- CORS is configured for Chrome extensions
-- Input validation on all endpoints
-- Rate limiting can be added for production
+- No sensitive data is stored in the extension
+- All API calls are made through the backend server
 
-## 🚀 Deployment
-
-### Backend Deployment
-- Deploy to Heroku, Railway, or any Python hosting service
-- Set environment variables
-- Update extension manifest with production URL
-
-### Extension Distribution
-- Package extension for Chrome Web Store
-- Or distribute as unpacked extension for development
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
-## 📝 License
+## License
 
-MIT License - feel free to use this project for your hackathon!
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Troubleshooting
+## Acknowledgments
 
-### Common Issues
+- Google's Gemini API for powering the AI assistance
+- LeetCode for providing the platform for coding practice
+- The open-source community for various tools and libraries used
 
-**Extension not loading:**
-- Check manifest.json syntax
-- Ensure all files are in the extension/ folder
-- Reload extension in chrome://extensions/
+## Support
 
-**Backend connection failed:**
-- Verify FastAPI server is running on port 8000
-- Check CORS configuration
-- Ensure firewall allows localhost connections
-
-**Assistance not generating:**
-- Check Gemini API key configuration
-- Verify internet connection
-- Check browser console for errors
-
-## 🎉 Hackathon Tips
-
-1. **Start with the demo setup** - it works out of the box
-2. **Focus on UI/UX** - make it look polished
-3. **Test with different problems** - ensure it works across various LeetCode problems
-4. **Add more languages** - expand language support
-5. **Implement caching** - reduce API calls for better performance
-
----
-
-Built with ❤️ for hackathon success! 🚀
+For issues, questions, or contributions, please open an issue in the GitHub repository.
