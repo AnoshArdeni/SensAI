@@ -1,6 +1,7 @@
 # SensAI - LeetCode Learning Assistant
 
 A Chrome extension powered by Google's Gemini API to help you learn and solve LeetCode problems more effectively.
+<img width="624" alt="image" src="https://github.com/user-attachments/assets/c4d18b1c-720a-47c5-a725-091078959c0b" />
 
 ## Features
 
@@ -11,6 +12,9 @@ A Chrome extension powered by Google's Gemini API to help you learn and solve Le
   - JavaScript
   - Java
   - C++
+## Website to Install
+
+<img width="618" alt="image" src="https://github.com/user-attachments/assets/ed683c3f-6170-4786-9ead-5963fa9a0545" />
 
 ## Installation
 
