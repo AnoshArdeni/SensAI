@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 import os
 import json
 import traceback
@@ -120,10 +121,10 @@ async def get_assistance(request: AssistRequest):
             print("\nCalling Gemini API...")
             response = model.generate_content(
                 prompt,
-                generation_config={
-                    "temperature": 0.2,
-                    "max_output_tokens": 500,
-                }
+                generation_config=GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=500,
+                )
             )
             if not response.text:
                 raise Exception("Empty response received from Gemini API")

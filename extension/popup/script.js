@@ -41,6 +41,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
 });
 
+document.addEventListener('DOMContentLoaded', function () {
+    const codeBtn = document.querySelector('.code-btn');
+    const hintBtn = document.querySelector('.hint-btn');
+
+    codeBtn.addEventListener('click', function () {
+        codeBtn.classList.add('selected');
+        hintBtn.classList.remove('selected');
+    });
+
+    hintBtn.addEventListener('click', function () {
+        hintBtn.classList.add('selected');
+        codeBtn.classList.remove('selected');
+    });
+});
+
 // Update UI elements
 function updateModeButtons() {
     nextCodeBtn.classList.toggle('active', currentMode === 'next_code');
