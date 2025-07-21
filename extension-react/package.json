@@ -1,0 +1,14 @@
+{
+  "name": "sensai-extension-react",
+  "version": "2.0.0",
+  "description": "SensAI Chrome Extension - React + TypeScript version",
+  "scripts": {
+    "build": "cd popup && npm run build",
+    "dev": "cd popup && npm run dev",
+    "install-deps": "cd popup && npm install",
+    "type-check": "cd popup && npx tsc --noEmit"
+  },
+  "keywords": ["chrome-extension", "react", "typescript", "leetcode", "ai"],
+  "author": "SensAI Team",
+  "license": "MIT"
+} 
