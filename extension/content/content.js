@@ -1,6 +1,26 @@
 // Content script for LeetCode integration
 console.log('SensAI: Content script loaded');
 
+// Function to update the draggable panel with current problem info
+function updateDraggablePanel() {
+    const panel = document.getElementById('sensai-draggable-panel');
+    if (!panel) return;
+
+    const problemInfo = extractProblemInfo();
+    
+    // Update the current problem display
+    const currentProblemElement = panel.querySelector('.sensai-current-problem');
+    if (currentProblemElement && problemInfo.success) {
+        currentProblemElement.textContent = problemInfo.title;
+    }
+
+    // Update the display text
+    const displayElement = panel.querySelector('.sensai-display-text');
+    if (displayElement) {
+        displayElement.textContent = problemInfo.success ? 'Ready' : 'Error';
+    }
+}
+
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getProblemInfo') {
@@ -156,11 +176,28 @@ const observer = new MutationObserver(() => {
         // Wait a bit for the page to load
         setTimeout(() => {
             console.log('SensAI: Page changed, problem info updated');
+            updateDraggablePanel();
         }, 1000);
     }
 });
 
 observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
+
+// Update panel when it's created
+const panelObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+            if (node.id === 'sensai-draggable-panel') {
+                setTimeout(updateDraggablePanel, 100);
+            }
+        });
+    });
+});
+
+panelObserver.observe(document.body, {
     childList: true,
     subtree: true
 });
