@@ -112,6 +112,81 @@ async function injectDraggablePanel() {
             panel.remove();
         });
 
+        // === Button Functionality ===
+        // Code/Hint button functionality
+        const codeBtn = panel.querySelector('.sensai-code-btn');
+        const hintBtn = panel.querySelector('.sensai-hint-btn');
+        codeBtn.addEventListener('click', () => {
+            codeBtn.classList.add('selected');
+            hintBtn.classList.remove('selected');
+            updateDisplayText('Code mode selected');
+        });
+        hintBtn.addEventListener('click', () => {
+            hintBtn.classList.add('selected');
+            codeBtn.classList.remove('selected');
+            updateDisplayText('Hint mode selected');
+        });
+
+        // Send button functionality
+        const sendBtn = panel.querySelector('.sensai-send-btn');
+        sendBtn.addEventListener('click', async () => {
+            const displayText = panel.querySelector('.sensai-display-text');
+            displayText.textContent = 'Sending...';
+            try {
+                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+                const result = await chrome.tabs.sendMessage(tab.id, {action: 'getProblemInfo'});
+                if (result && result.success) {
+                    const backendResponse = await fetch('http://localhost:8000/process', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            problem: result.data,
+                            mode: codeBtn.classList.contains('selected') ? 'code' : 'hint'
+                        })
+                    });
+                    const backendData = await backendResponse.json();
+                    updateDisplayText(backendData.response || 'Response received');
+                } else {
+                    updateDisplayText('Error: Could not get problem info');
+                }
+            } catch (error) {
+                console.error('Error sending request:', error);
+                updateDisplayText('Error: ' + error.message);
+            }
+        });
+
+        // Copy button functionality
+        const copyBtn = panel.querySelector('.sensai-action-btn[title="Copy"]');
+        copyBtn.addEventListener('click', async () => {
+            try {
+                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+                const result = await chrome.tabs.sendMessage(tab.id, {action: 'getProblemInfo'});
+                if (result && result.success && result.data.code) {
+                    await navigator.clipboard.writeText(result.data.code);
+                    updateDisplayText('Code copied to clipboard!');
+                } else {
+                    updateDisplayText('No code to copy');
+                }
+            } catch (error) {
+                console.error('Error copying code:', error);
+                updateDisplayText('Error copying code');
+            }
+        });
+
+        // Import button functionality
+        const importBtn = panel.querySelector('.sensai-action-btn[title="Import"]');
+        importBtn.addEventListener('click', () => {
+            updateDisplayText('Import functionality coming soon!');
+        });
+
+        // Helper function to update display text
+        function updateDisplayText(text) {
+            const displayElement = panel.querySelector('.sensai-display-text');
+            if (displayElement) {
+                displayElement.textContent = text;
+            }
+        }
+
     } catch (error) {
         console.error('Failed to load UI files:', error);
         // Fallback to hardcoded version if files fail to load
@@ -397,6 +472,81 @@ function injectFallbackPanel() {
     closeBtn.addEventListener('click', () => {
         panel.remove();
     });
+
+    // === Button Functionality ===
+    // Code/Hint button functionality
+    const codeBtn = panel.querySelector('.sensai-code-btn');
+    const hintBtn = panel.querySelector('.sensai-hint-btn');
+    codeBtn.addEventListener('click', () => {
+        codeBtn.classList.add('selected');
+        hintBtn.classList.remove('selected');
+        updateDisplayText('Code mode selected');
+    });
+    hintBtn.addEventListener('click', () => {
+        hintBtn.classList.add('selected');
+        codeBtn.classList.remove('selected');
+        updateDisplayText('Hint mode selected');
+    });
+
+    // Send button functionality
+    const sendBtn = panel.querySelector('.sensai-send-btn');
+    sendBtn.addEventListener('click', async () => {
+        const displayText = panel.querySelector('.sensai-display-text');
+        displayText.textContent = 'Sending...';
+        try {
+            const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+            const result = await chrome.tabs.sendMessage(tab.id, {action: 'getProblemInfo'});
+            if (result && result.success) {
+                const backendResponse = await fetch('http://localhost:8000/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problem: result.data,
+                        mode: codeBtn.classList.contains('selected') ? 'code' : 'hint'
+                    })
+                });
+                const backendData = await backendResponse.json();
+                updateDisplayText(backendData.response || 'Response received');
+            } else {
+                updateDisplayText('Error: Could not get problem info');
+            }
+        } catch (error) {
+            console.error('Error sending request:', error);
+            updateDisplayText('Error: ' + error.message);
+        }
+    });
+
+    // Copy button functionality
+    const copyBtn = panel.querySelector('.sensai-action-btn[title="Copy"]');
+    copyBtn.addEventListener('click', async () => {
+        try {
+            const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+            const result = await chrome.tabs.sendMessage(tab.id, {action: 'getProblemInfo'});
+            if (result && result.success && result.data.code) {
+                await navigator.clipboard.writeText(result.data.code);
+                updateDisplayText('Code copied to clipboard!');
+            } else {
+                updateDisplayText('No code to copy');
+            }
+        } catch (error) {
+            console.error('Error copying code:', error);
+            updateDisplayText('Error copying code');
+        }
+    });
+
+    // Import button functionality
+    const importBtn = panel.querySelector('.sensai-action-btn[title="Import"]');
+    importBtn.addEventListener('click', () => {
+        updateDisplayText('Import functionality coming soon!');
+    });
+
+    // Helper function to update display text
+    function updateDisplayText(text) {
+        const displayElement = panel.querySelector('.sensai-display-text');
+        if (displayElement) {
+            displayElement.textContent = text;
+        }
+    }
 }
 
 // Listen for tab updates
