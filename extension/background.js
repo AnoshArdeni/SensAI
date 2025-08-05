@@ -25,7 +25,102 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 // Function to inject the draggable panel
-function injectDraggablePanel() {
+async function injectDraggablePanel() {
+    // Check if panel already exists
+    if (document.getElementById('sensai-draggable-panel')) {
+        return;
+    }
+
+    try {
+        // Load the HTML template
+        const htmlResponse = await fetch(chrome.runtime.getURL('ui/panel.html'));
+        const htmlTemplate = await htmlResponse.text();
+
+        // Load the CSS
+        const cssResponse = await fetch(chrome.runtime.getURL('ui/panel.css'));
+        const cssStyles = await cssResponse.text();
+
+        // Create the draggable panel
+        const panel = document.createElement('div');
+        panel.id = 'sensai-draggable-panel';
+        panel.innerHTML = htmlTemplate;
+
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = cssStyles;
+
+        document.head.appendChild(style);
+        document.body.appendChild(panel);
+
+        // Dragging functionality
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        const header = panel.querySelector('.sensai-panel-header');
+
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+
+        function dragStart(e) {
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+
+            if (e.target === header || header.contains(e.target)) {
+                isDragging = true;
+            }
+        }
+
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, panel);
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+        }
+
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        }
+
+        // Minimize functionality
+        const minimizeBtn = panel.querySelector('.sensai-minimize-btn');
+        minimizeBtn.addEventListener('click', () => {
+            panel.classList.toggle('minimized');
+            minimizeBtn.textContent = panel.classList.contains('minimized') ? '+' : '−';
+        });
+
+        // Close functionality
+        const closeBtn = panel.querySelector('.sensai-close-btn');
+        closeBtn.addEventListener('click', () => {
+            panel.remove();
+        });
+
+    } catch (error) {
+        console.error('Failed to load UI files:', error);
+        // Fallback to hardcoded version if files fail to load
+        injectFallbackPanel();
+    }
+}
+
+// Fallback function with hardcoded UI (in case file loading fails)
+function injectFallbackPanel() {
     // Check if panel already exists
     if (document.getElementById('sensai-draggable-panel')) {
         return;
