@@ -14,10 +14,18 @@ function updateDraggablePanel() {
         currentProblemElement.textContent = problemInfo.title;
     }
 
-    // Update the display text
+    // Update the display text and status color
     const displayElement = panel.querySelector('.sensai-display-text');
     if (displayElement) {
-        displayElement.textContent = problemInfo.success ? 'Ready' : 'Error';
+        if (problemInfo.success) {
+            displayElement.textContent = 'Ready';
+            displayElement.classList.remove('status-error', 'status-wait');
+            displayElement.classList.add('status-ready');
+        } else {
+            displayElement.textContent = 'Error';
+            displayElement.classList.remove('status-ready', 'status-wait');
+            displayElement.classList.add('status-error');
+        }
     }
 }
 

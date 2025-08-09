@@ -118,6 +118,19 @@
     font-weight: 600;
 }
 
+/* Status colors */
+.sensai-display-text.status-ready {
+    color: #00C853; /* green */
+}
+
+.sensai-display-text.status-error {
+    color: #FF5252; /* red */
+}
+
+.sensai-display-text.status-wait {
+    color: #FFD54F; /* yellow */
+}
+
 .sensai-panel-footer {
     display: flex;
     align-items: center;
