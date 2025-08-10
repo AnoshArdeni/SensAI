@@ -34,6 +34,7 @@ class ProcessRequest(BaseModel):
     problem: dict  # Contains title, description, code from extension
     mode: str  # "code" or "hint"
     use_evaluation: bool = False  # Whether to use GPT evaluation (default: False for speed)
+    max_retries: int = None  # Override default retry count (None = use default based on use_evaluation)
 
 @app.post("/process")
 async def process_request(request: ProcessRequest):
@@ -55,13 +56,19 @@ async def process_request(request: ProcessRequest):
         else:
             raise HTTPException(status_code=400, detail="Mode must be 'code' or 'hint'")
         
+        # Determine retry count: explicit override, or default based on evaluation setting
+        if request.max_retries is not None:
+            retry_count = request.max_retries
+        else:
+            retry_count = 2 if request.use_evaluation else 0
+        
         result = hint_generator.generate_and_evaluate(
             problem_name=problem_name,
             code_so_far=code_so_far,
             language=language,
             mode=gen_mode,
             threshold=3.0,  # Retry if score < 3.0
-            max_retries=2 if request.use_evaluation else 0,  # No retries without evaluation
+            max_retries=retry_count,
             use_evaluation=request.use_evaluation
         )
         
@@ -84,14 +91,22 @@ async def process_request(request: ProcessRequest):
                 final_content = final_response
             
             pipeline_desc = "Claude only" if not request.use_evaluation else "Claude + GPT with evaluation"
-            return {
+            
+            # Build response with optional detailed evaluation
+            response_data = {
                 "success": True,
                 "response": final_content,
                 "final_parsed": result.get('final_parsed'),  # Include parsed JSON
-                "evaluation_score": result['final_evaluation'].get('score', 0) if result['final_evaluation'] else None,
+                "evaluation_score": result['final_evaluation'].get('overall_score', result['final_evaluation'].get('score', 0)) if result['final_evaluation'] else None,
                 "attempts": len(result['attempts']),
                 "pipeline": pipeline_desc
             }
+            
+            # Only include detailed evaluation if evaluation was actually performed
+            if request.use_evaluation and result.get('final_evaluation'):
+                response_data["detailed_evaluation"] = result['final_evaluation']
+            
+            return response_data
         else:
             # Provide detailed error information from attempts
             error_details = []

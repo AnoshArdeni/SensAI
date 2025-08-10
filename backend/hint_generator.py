@@ -15,22 +15,34 @@ load_dotenv()
 
 class HintGenerator:
     def __init__(self):
-        """Initialize the hint generator with Claude and GPT clients"""
+        """Initialize the hint generator with Claude client (GPT client initialized on-demand)"""
         
         # Get API keys
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.claude_api_key = os.getenv('CLAUDE_API_KEY')
         
+        # Claude API key is always required
         if not self.claude_api_key:
             raise ValueError("Please set CLAUDE_API_KEY in .env file")
-        if not self.openai_api_key:
-            raise ValueError("Please set OPENAI_API_KEY in .env file")
         
-        # Initialize clients (timeouts set per-request)
-        self.openai_client = OpenAI(api_key=self.openai_api_key)
+        # Initialize Claude client (required for all operations)
         self.claude_client = anthropic.Anthropic(api_key=self.claude_api_key)
         
-        # System prompts (using the same prompts from the original system)
+        # OpenAI client initialized lazily when evaluation is needed
+        self.openai_client = None
+        
+        # Initialize system prompts
+        self._setup_prompts()
+    
+    def _ensure_openai_client(self):
+        """Initialize OpenAI client if not already done and API key is available"""
+        if self.openai_client is None:
+            if not self.openai_api_key:
+                raise ValueError("OPENAI_API_KEY is required for evaluation but not set in .env file")
+            self.openai_client = OpenAI(api_key=self.openai_api_key)
+    
+    def _setup_prompts(self):
+        """Initialize system prompts"""
         self.CODE_SYSTEM_PROMPT ="""You are Claude, an expert AI coding assistant with deep knowledge of data structures and algorithms.
 
 Your task is to analyze the user's current code state and provide exactly the next step they need to progress, not a full solution.
@@ -50,49 +62,68 @@ Return ONLY a single, valid JSON object—no prose."""
 
         self.GPT_EVALUATOR_PROMPT = """You are an expert coding mentor evaluating Claude's response for quality and effectiveness.
 
-Analyze the response comprehensively across these dimensions and provide feedback FIRST, then provide a score:
+EVALUATION FRAMEWORK:
+Evaluate each response using 4 core metrics, then apply mode-specific criteria:
 
-TECHNICAL ACCURACY:
-- Is the code syntactically correct?
-- Does it use appropriate algorithms/data structures?
-- Are there any logical errors or bugs?
-- Is it technically sound for the given problem?
+=== 4 CORE METRICS (Universal) ===
 
-PEDAGOGICAL VALUE:
-- Does it match the requested mode (hint vs code)?
-- Is it appropriately scoped (not too much, not too little)?
-- Will it genuinely help the user learn and progress?
-- Does it build on what they already have?
+1. TECHNICAL ACCURACY (1-5)
+   - Syntax correctness and logical soundness
+   - Appropriate use of algorithms/data structures
+   - No bugs or conceptual errors
 
-CLARITY & FORMAT:
-- Is the response clear and understandable?
-- Does it follow the required JSON format exactly?
-- Are any comments helpful and concise?
-- Is the response well-structured?
+2. PEDAGOGICAL VALUE (1-5)
+   - Helpful for learning progression
+   - Appropriately scoped (not too much/little)
+   - Builds meaningfully on existing code
 
-CONTEXTUAL APPROPRIATENESS:
-- Does it address the user's current state properly?
-- Is it the logical next step from their code?
-- Does it avoid giving away the entire solution?
-- Is the difficulty level appropriate?
+3. CLARITY & COMMUNICATION (1-5)
+   - Clear, understandable language
+   - Proper JSON format compliance
+   - Well-structured presentation
 
-Rate on a scale of 1-5:
-5 = Excellent (technically perfect, pedagogically optimal, clearly formatted)
-4 = Good (very helpful with only minor issues)
-3 = Adequate (acceptable but has room for improvement)
-2 = Poor (significant problems that limit effectiveness)
-1 = Very Poor (incorrect, confusing, or completely unhelpful)
+4. CONTEXTUAL RELEVANCE (1-5)
+   - Addresses user's current state appropriately
+   - Logical next step from their code
+   - Suitable difficulty progression
 
+=== MODE-SPECIFIC CRITERIA ===
+(Mode-specific criteria will be dynamically added based on the evaluation mode)
+
+=== SCORING SCALE ===
+5 = EXCELLENT: Exceptional quality, perfect execution of criteria
+4 = GOOD: High quality with only minor areas for improvement  
+3 = ADEQUATE: Meets basic requirements but has notable room for improvement
+2 = POOR: Significant issues that limit effectiveness and learning value
+1 = VERY POOR: Incorrect, confusing, or completely unhelpful
+
+=== OUTPUT FORMAT ===
 Respond with exactly one JSON object:
 {
-  "score": 1-5,
+  "overall_score": 1-5,
   "is_good": true/false,
-  "feedback": "Detailed explanation covering technical accuracy, pedagogical value, and clarity",
-  "improvement_advice": "Specific actionable advice for improvement if score < 3, null otherwise"
-}"""
+  "metrics": {
+    "technical_accuracy": 1-5,
+    "pedagogical_value": 1-5,
+    "clarity_communication": 1-5,
+    "contextual_relevance": 1-5
+  },
+  "mode_compliance": {
+    "follows_mode_requirements": true/false,
+    "mode_specific_feedback": "Brief assessment of mode-specific criteria"
+  },
+  "summary_feedback": "Concise overall assessment highlighting key strengths and weaknesses",
+  "improvement_advice": "Specific actionable advice if overall_score < 3, null otherwise"
+}
+
+CRITICAL JSON FORMATTING:
+- Keep all text fields to 1-2 sentences maximum
+- Escape quotes with \\" and replace newlines with spaces  
+- Use null (not "null") for improvement_advice when overall_score >= 3
+- Overall score should reflect the average of the 4 metrics with mode compliance consideration"""
 
     def extract_json_from_response(self, text: str) -> Optional[Dict[str, Any]]:
-        """Extract JSON from Claude response with robust parsing"""
+        """Extract JSON from response with robust parsing and GPT improvement advice handling"""
         txt = text.strip()
         
         # Strip markdown fences
@@ -104,6 +135,15 @@ Respond with exactly one JSON object:
             return json.loads(txt)
         except json.JSONDecodeError:
             pass
+        
+        # Special handling for GPT evaluation responses with potential improvement_advice issues
+        if '"improvement_advice"' in txt:
+            # Try to fix common JSON issues in GPT evaluation responses
+            fixed_txt = self._fix_gpt_json_issues(txt)
+            try:
+                return json.loads(fixed_txt)
+            except json.JSONDecodeError:
+                pass
         
         # Scan for balanced braces
         start = txt.find("{")
@@ -124,6 +164,67 @@ Respond with exactly one JSON object:
             start = txt.find("{", start + 1)
         
         return None
+    
+    def _fix_gpt_json_issues(self, text: str) -> str:
+        """Fix common JSON formatting issues in GPT evaluation responses"""
+        import re
+        
+        # Common fixes for GPT JSON responses
+        fixed = text
+        
+        # Fix improvement_advice field if it's causing issues
+        pattern = r'"improvement_advice":\s*"([^"]*(?:"[^"]*)*)"'
+        match = re.search(pattern, fixed, re.DOTALL)
+        
+        if match:
+            advice_content = match.group(1)
+            # Remove unescaped quotes and newlines that break JSON
+            clean_advice = advice_content.replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
+            # Truncate if too long (common cause of JSON issues)
+            if len(clean_advice) > 300:
+                clean_advice = clean_advice[:300] + "..."
+            fixed = re.sub(pattern, f'"improvement_advice": "{clean_advice}"', fixed, flags=re.DOTALL)
+        
+        # Fix similar issues with feedback field
+        pattern = r'"feedback":\s*"([^"]*(?:"[^"]*)*)"'
+        match = re.search(pattern, fixed, re.DOTALL)
+        
+        if match:
+            feedback_content = match.group(1)
+            clean_feedback = feedback_content.replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
+            if len(clean_feedback) > 400:
+                clean_feedback = clean_feedback[:400] + "..."
+            fixed = re.sub(pattern, f'"feedback": "{clean_feedback}"', fixed, flags=re.DOTALL)
+        
+        # Handle truncated JSON (missing closing brace)
+        if not fixed.rstrip().endswith('}'):
+            # Count opening and closing braces
+            open_braces = fixed.count('{')
+            close_braces = fixed.count('}')
+            if open_braces > close_braces:
+                fixed += '}' * (open_braces - close_braces)
+        
+        return fixed
+    
+    def _get_mode_specific_criteria(self, mode: str) -> str:
+        """Get mode-specific evaluation criteria based on the mode being evaluated"""
+        
+        if mode == "hint":
+            return """=== HINT MODE CRITERIA ===
+- Conceptual guidance without full solution
+- Under 25 words
+- Suggests approach/pattern, not implementation
+- Encourages critical thinking"""
+        
+        elif mode == "next_code":
+            return """=== CODE MODE CRITERIA ===
+- Concrete next step (1-3 lines max)
+- Builds on existing code structure
+- Proper syntax and helpful comments
+- Logical progression, not complete solution"""
+        
+        else:
+            return f"=== UNKNOWN MODE: {mode} ===\nEvaluate based on general criteria only."
 
     def is_valid_schema(self, obj: Dict[str, Any], mode: str) -> Tuple[bool, str]:
         """Strict schema validation with specific error reporting"""
@@ -171,7 +272,7 @@ Respond with exactly one JSON object:
             code_so_far=code_so_far,
             language=language,
             mode=mode,
-            threshold=3.0,
+            threshold=3.1,
             max_retries=0,  # No retries since no evaluation
             use_evaluation=False
         )
@@ -370,7 +471,13 @@ CONSTRAINTS:
             }
 
     def get_gpt_evaluation(self, claude_response: str, problem_name: str, code_so_far: str, mode: str) -> Dict[str, Any]:
-        """Get GPT's evaluation of Claude's response"""
+        """Get GPT's evaluation of Claude's response with mode-specific criteria"""
+        
+        # Ensure OpenAI client is initialized (will raise error if API key missing)
+        self._ensure_openai_client()
+        
+        # Add mode-specific criteria to the prompt
+        mode_specific_criteria = self._get_mode_specific_criteria(mode)
         
         evaluation_input = {
             "mode_requested": mode,
@@ -379,7 +486,7 @@ CONSTRAINTS:
             "claude_response": claude_response
         }
         
-        prompt = f"{self.GPT_EVALUATOR_PROMPT}\n\nEvaluation Input:\n{json.dumps(evaluation_input, indent=2)}"
+        prompt = f"{self.GPT_EVALUATOR_PROMPT}\n\n{mode_specific_criteria}\n\nEvaluation Input:\n{json.dumps(evaluation_input, indent=2)}"
         
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -417,18 +524,49 @@ CONSTRAINTS:
             print(f"   Input - Claude Response: {claude_response[:50]}{'...' if len(claude_response) > 50 else ''}")
             print(f"   GPT Raw Response: {response_text}")
             
-            # Parse JSON response
-            try:
-                evaluation = json.loads(response_text)
-                print(f"   📊 Score: {evaluation.get('score', 'N/A')}/5")
+            # Parse JSON response with improved handling
+            evaluation = self.extract_json_from_response(response_text)
+            
+            if evaluation:
+                # Display overall results
+                overall_score = evaluation.get('overall_score', evaluation.get('score', 'N/A'))  # Fallback for old format
+                print(f"   📊 Overall Score: {overall_score}/5")
                 print(f"   ✅ Is Good: {evaluation.get('is_good', 'N/A')}")
-                print(f"   💬 Feedback: {evaluation.get('feedback', 'No feedback')[:100]}{'...' if len(evaluation.get('feedback', '')) > 100 else ''}")
+                
+                # Display detailed metrics if available
+                metrics = evaluation.get('metrics', {})
+                if metrics:
+                    print(f"   📈 Detailed Metrics:")
+                    print(f"      Technical Accuracy: {metrics.get('technical_accuracy', 'N/A')}/5")
+                    print(f"      Pedagogical Value: {metrics.get('pedagogical_value', 'N/A')}/5")
+                    print(f"      Clarity & Communication: {metrics.get('clarity_communication', 'N/A')}/5")
+                    print(f"      Contextual Relevance: {metrics.get('contextual_relevance', 'N/A')}/5")
+                
+                # Display mode compliance
+                mode_compliance = evaluation.get('mode_compliance', {})
+                if mode_compliance:
+                    follows_reqs = mode_compliance.get('follows_mode_requirements', 'N/A')
+                    mode_feedback = mode_compliance.get('mode_specific_feedback', '')
+                    print(f"   🎯 Mode Compliance: {follows_reqs}")
+                    if mode_feedback:
+                        print(f"      {mode_feedback[:80]}{'...' if len(mode_feedback) > 80 else ''}")
+                
+                # Display summary feedback
+                summary = evaluation.get('summary_feedback', evaluation.get('feedback', 'No feedback'))  # Fallback for old format
+                print(f"   💬 Summary: {summary[:100]}{'...' if len(summary) > 100 else ''}")
+                
+                # Show improvement advice if available
+                improvement_advice = evaluation.get('improvement_advice')
+                if improvement_advice and improvement_advice != "null":
+                    print(f"   🔧 Improvement Advice: {improvement_advice[:100]}{'...' if len(improvement_advice) > 100 else ''}")
+                
                 return {
                     "success": True,
                     "evaluation": evaluation
                 }
-            except json.JSONDecodeError as e:
-                print(f"   ❌ JSON Parse Error: {str(e)}")
+            else:
+                print(f"   ❌ Failed to parse GPT evaluation JSON")
+                print(f"   📝 Raw response: {response_text[:300]}...")
                 return {
                     "success": False,
                     "error": f"Invalid JSON from GPT: {response_text[:200]}..."
@@ -551,7 +689,7 @@ CONSTRAINTS:
                 continue
             
             evaluation = gpt_result["evaluation"]
-            score = evaluation.get("score", 0)
+            score = evaluation.get("overall_score", evaluation.get("score", 0))  # Handle both old and new format
             is_good = evaluation.get("is_good", False)
             
             if score >= threshold or attempt == max_retries:
