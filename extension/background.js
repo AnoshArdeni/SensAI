@@ -1,113 +1,319 @@
 // Simple working background script
 console.log('Background script loaded');
 
-// Handle messages from content scripts for OAuth
+// Handle messages from content scripts for centralized auth
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Background received message:', message.action);
     
-    if (message.action === 'signInWithGoogle') {
-        handleRealGoogleSignIn().then(sendResponse);
+    if (message.action === 'signIn') {
+        handleSignIn().then(sendResponse);
         return true; // Will respond asynchronously
     } else if (message.action === 'signOut') {
-        handleRealSignOut().then(sendResponse);
+        handleSignOut().then(sendResponse);
         return true;
     } else if (message.action === 'checkAuthStatus') {
-        checkRealAuthStatus().then(sendResponse);
+        checkAuthStatus().then(sendResponse);
+        return true;
+    } else if (message.action === 'getAIAssistance') {
+        handleAIAssistance(message.data).then(sendResponse);
         return true;
     }
 });
 
-// Real Google Sign In handler using Chrome Identity API
-async function handleRealGoogleSignIn() {
+// Check if user is already authenticated by trying to access website auth info
+async function checkWebsiteAuthentication() {
     try {
-        console.log('Background: Starting real Google sign-in...');
+        console.log('Background: Checking for existing authentication...');
         
-        // Get OAuth token using Chrome Identity API
-        const token = await new Promise((resolve, reject) => {
-            chrome.identity.getAuthToken({ interactive: true }, (token) => {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
+        // Method 1: Check if we can get auth info from the website directly
+        const websiteTab = await chrome.tabs.query({
+            url: 'http://localhost:9002/*'
+        });
+        
+        console.log('Background: Website tabs found:', websiteTab.length, websiteTab.map(t => t.url));
+        
+        if (websiteTab.length > 0) {
+            console.log('Background: Found website tab, checking auth...');
+            
+            // Execute script in website tab to get auth status
+            try {
+                const results = await chrome.scripting.executeScript({
+                    target: { tabId: websiteTab[0].id },
+                    func: () => {
+                        // Check if Clerk is available and user is signed in
+                        console.log('Content script: Checking window.Clerk:', window.Clerk);
+                        console.log('Content script: Checking window.Clerk.user:', window.Clerk?.user);
+                        
+                        if (window.Clerk && window.Clerk.user) {
+                            const user = {
+                                id: window.Clerk.user.id,
+                                email: window.Clerk.user.primaryEmailAddress?.emailAddress,
+                                firstName: window.Clerk.user.firstName,
+                                lastName: window.Clerk.user.lastName,
+                                fullName: window.Clerk.user.fullName
+                            };
+                            console.log('Content script: Found Clerk user:', user);
+                            return {
+                                success: true,
+                                user: user
+                            };
+                        }
+                        
+                        console.log('Content script: No Clerk user found');
+                        return { success: false };
+                    }
+                });
+                
+                console.log('Background: Script execution results:', results);
+                if (results && results[0] && results[0].result && results[0].result.success) {
+                    console.log('Background: Found authenticated user via website tab:', results[0].result.user);
+                    return {
+                        success: true,
+                        user: {
+                            ...results[0].result.user,
+                            displayName: results[0].result.user.firstName || results[0].result.user.fullName || results[0].result.user.email?.split('@')[0] || 'User'
+                        },
+                        token: 'website-auth-token',
+                        session: 'website-session'
+                    };
                 } else {
-                    resolve(token);
+                    console.log('Background: No authenticated user found via website tab');
+                }
+            } catch (error) {
+                console.log('Background: Could not execute script in website tab:', error);
+            }
+        }
+        
+        // Method 2: Check localStorage from website tab  
+        if (websiteTab.length > 0) {
+            try {
+                const storageResults = await chrome.scripting.executeScript({
+                    target: { tabId: websiteTab[0].id },
+                    func: () => {
+                        // Check for stored auth data
+                        console.log('Content script: Checking localStorage...');
+                        const clerkUser = localStorage.getItem('clerk-user');
+                        const sensaiAuth = localStorage.getItem('sensai-auth');
+                        const sessionClerk = sessionStorage.getItem('clerk-user');
+                        
+                        console.log('Content script: localStorage clerk-user:', clerkUser);
+                        console.log('Content script: localStorage sensai-auth:', sensaiAuth);
+                        console.log('Content script: sessionStorage clerk-user:', sessionClerk);
+                        
+                        const authData = clerkUser || sensaiAuth || sessionClerk;
+                        if (authData) {
+                            try {
+                                const parsed = JSON.parse(authData);
+                                console.log('Content script: Parsed auth data:', parsed);
+                                return { success: true, user: parsed };
+                            } catch (e) {
+                                console.log('Content script: Error parsing auth data:', e);
+                                return { success: false };
+                            }
+                        }
+                        console.log('Content script: No auth data in storage');
+                        return { success: false };
+                    }
+                });
+                
+                if (storageResults && storageResults[0] && storageResults[0].result && storageResults[0].result.success) {
+                    console.log('Background: Found auth data in website storage');
+                                    return {
+                    success: true,
+                    user: {
+                        ...storageResults[0].result.user,
+                        displayName: storageResults[0].result.user.firstName || storageResults[0].result.user.name || storageResults[0].result.user.email?.split('@')[0] || 'User'
+                    },
+                    token: 'storage-auth-token',
+                    session: 'storage-session'
+                };
+                }
+            } catch (error) {
+                console.log('Background: Could not access website storage:', error);
+            }
+        }
+
+        // Method 3: Try to make a request to our backend with website credentials
+        try {
+            const response = await fetch('http://localhost:8000/api/auth/session', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
                 }
             });
-        });
-        
-        console.log('Background: Got OAuth token from Chrome Identity API');
-        
-        // Get user info from Google API
-        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: {
-                'Authorization': `Bearer ${token}`
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Background: Backend confirmed existing session, data:', data);
+                
+                // Only return success if we have real user data
+                if (data.user && data.user.id && data.user.id !== 'fake-id') {
+                    const user = data.user;
+                    return {
+                        success: true,
+                        user: {
+                            ...user,
+                            displayName: user.firstName || user.name || user.email?.split('@')[0] || 'User'
+                        },
+                        token: 'backend-session-token',
+                        session: 'backend-session'
+                    };
+                } else {
+                    console.log('Background: Backend returned fake/empty user data');
+                }
             }
-        });
+        } catch (error) {
+            console.log('Background: Backend auth check failed:', error);
+        }
         
-        const userInfo = await response.json();
-        console.log('Background: Got real user info for:', userInfo.email);
-        
-        const user = {
-            uid: userInfo.id,
-            email: userInfo.email,
-            displayName: userInfo.name,
-            photoURL: userInfo.picture
-        };
-        
-        // Store user data in Chrome storage
-        await chrome.storage.local.set({ 
-            currentUser: user,
-            authToken: token,
-            isRealAuth: true
-        });
-        
-        return { success: true, user, isReal: true };
-        
+        return { success: false };
     } catch (error) {
-        console.error('Background: Real sign-in error:', error);
+        console.error('Background: Error checking website auth:', error);
+        return { success: false };
+    }
+}
+
+// Handle sign in through centralized backend
+async function handleSignIn() {
+    try {
+        console.log('Background: Checking existing authentication...');
         
-        if (error.message.includes('OAuth2') || error.message.includes('client id')) {
-            return { 
-                success: false, 
-                error: 'OAuth not configured. Please set up Google Cloud OAuth 2.0 Client ID for Chrome extension. See get-extension-id.html for instructions.' 
+        // First, try to get session from website cookies
+        const websiteAuth = await checkWebsiteAuthentication();
+        if (websiteAuth.success) {
+            console.log('Background: Found existing website authentication');
+            // Store the auth info locally
+            await chrome.storage.local.set({
+                currentUser: websiteAuth.user,
+                authToken: websiteAuth.token,
+                clerkSession: websiteAuth.session
+            });
+            return {
+                success: true,
+                user: websiteAuth.user,
+                message: 'Automatically signed in using existing session'
             };
         }
         
+        // Final attempt: Try to get user data from stored extension data
+        const storedData = await chrome.storage.local.get(['currentUser', 'authToken']);
+        if (storedData.currentUser && storedData.currentUser.email !== 'user@example.com') {
+            console.log('Background: Using stored user data:', storedData.currentUser);
+            return {
+                success: true,
+                user: storedData.currentUser,
+                message: 'Using stored session data'
+            };
+        }
+
+        console.log('Background: No existing auth found, opening website...');
+        const authUrl = 'http://localhost:9002?ext_auth=true'; // Add parameter to indicate extension auth
+        const tab = await chrome.tabs.create({ url: authUrl });
+        
+        // Listen for messages from the website tab
+        const messageListener = (message, sender, sendResponse) => {
+            if (message.action === 'auth_completed' && sender.tab && sender.tab.id === tab.id) {
+                console.log('Background: Received auth completion from website');
+                // Store auth data
+                chrome.storage.local.set({
+                    currentUser: message.user,
+                    authToken: message.token || 'website-token',
+                    clerkSession: message.session || 'website-session'
+                });
+                // Remove listener
+                chrome.runtime.onMessage.removeListener(messageListener);
+                sendResponse({ success: true });
+            }
+        };
+        
+        chrome.runtime.onMessage.addListener(messageListener);
+        
+        return {
+            success: false,
+            message: 'Please sign in on the website tab that just opened. The extension will automatically detect when you\'re signed in.',
+            tabId: tab.id,
+            needsWebsiteAuth: true
+        };
+        
+    } catch (error) {
+        console.error('Background: Sign-in error:', error);
         return { success: false, error: error.message };
     }
 }
 
-// Real sign out handler
-async function handleRealSignOut() {
+// Handle sign out
+async function handleSignOut() {
     try {
-        console.log('Background: Signing out real user...');
+        console.log('Background: Signing out...');
         
-        // Get current token and revoke it
-        const result = await chrome.storage.local.get(['authToken']);
-        if (result.authToken) {
-            chrome.identity.removeCachedAuthToken({ token: result.authToken });
-        }
-        
-        // Clear stored user data
-        await chrome.storage.local.remove(['currentUser', 'authToken', 'isRealAuth']);
+        // Clear stored data
+        await chrome.storage.local.remove(['currentUser', 'authToken', 'clerkSession']);
         
         return { success: true };
         
     } catch (error) {
-        console.error('Background: Real sign-out error:', error);
+        console.error('Background: Sign-out error:', error);
         return { success: false, error: error.message };
     }
 }
 
-// Check real auth status
-async function checkRealAuthStatus() {
+// Check authentication status
+async function checkAuthStatus() {
     try {
-        const result = await chrome.storage.local.get(['currentUser', 'isRealAuth']);
-        if (result.currentUser && result.isRealAuth) {
-            return { success: true, user: result.currentUser, isReal: true };
-        } else {
-            return { success: false };
+        const result = await chrome.storage.local.get(['currentUser', 'authToken']);
+        if (result.currentUser && result.authToken) {
+            // Verify with backend
+            try {
+                const response = await fetch('http://localhost:8000/api/auth/session', {
+                    headers: {
+                        'Authorization': `Bearer ${result.authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    return { success: true, user: result.currentUser, authenticated: true };
+                }
+            } catch (error) {
+                console.error('Session verification failed:', error);
+            }
+            
+            // Token invalid, clear storage
+            await chrome.storage.local.remove(['currentUser', 'authToken']);
         }
+        
+        return { success: false, authenticated: false };
     } catch (error) {
-        console.error('Background: Error checking real auth status:', error);
+        console.error('Background: Error checking auth status:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Handle AI assistance requests
+async function handleAIAssistance(data) {
+    try {
+        const result = await chrome.storage.local.get(['authToken']);
+        if (!result.authToken) {
+            return { success: false, error: 'Not authenticated' };
+        }
+        
+        const response = await fetch('http://localhost:8000/api/ai/assist', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${result.authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`AI request failed: ${response.status}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('AI assistance error:', error);
         return { success: false, error: error.message };
     }
 }
@@ -172,26 +378,37 @@ async function injectDraggablePanel() {
         window.firebaseFunctions = {
             async signInWithGoogle() {
                 try {
-                    console.log('Starting Google authentication...');
+                    console.log('Starting centralized authentication...');
                     
-                    // Send message to background script for OAuth
+                    // Send message to background script for authentication
                     const result = await chrome.runtime.sendMessage({
-                        action: 'signInWithGoogle'
+                        action: 'signIn'
                     });
                     
                     if (result.success) {
                         window.currentUser = result.user;
-                        window.isRealAuth = true;
-                        updateAuthUI(true, result.user, true);
-                        console.log('Google sign-in successful:', result.user.email);
+                        console.log('Sign-in successful, user data:', result.user);
+                        updateAuthUI(true, result.user);
+                        console.log('Sign-in successful:', result.message || (result.user && result.user.email));
+                        
+                        // Show success message if auto-authenticated
+                        if (result.message && result.message.includes('Automatically')) {
+                            showNotification('✅ ' + result.message, 'success');
+                        }
+                    } else if (result.message && !result.needsWebsiteAuth) {
+                        alert(result.message);
+                        return result;
+                    } else if (result.needsWebsiteAuth) {
+                        showNotification('🔗 Opening authentication tab...', 'info');
+                        return result;
                     } else {
-                        console.error('Google sign-in failed:', result.error);
+                        console.error('Sign-in failed:', result.error);
                     }
                     
                     return result;
                     
                 } catch (error) {
-                    console.error('Google sign-in error:', error);
+                    console.error('Sign-in error:', error);
                     return { success: false, error: error.message };
                 }
             },
@@ -204,7 +421,6 @@ async function injectDraggablePanel() {
                     });
                     if (result.success) {
                         window.currentUser = null;
-                        window.isRealAuth = false;
                         updateAuthUI(false);
                     }
                     return result;
@@ -215,20 +431,53 @@ async function injectDraggablePanel() {
             }
         };
         
-        // Check for existing real authentication
+        // Check for existing authentication
         try {
             const result = await chrome.runtime.sendMessage({
                 action: 'checkAuthStatus'
             });
             
-            if (result.success && result.user && result.isReal) {
+            if (result.success && result.user && result.authenticated) {
                 window.currentUser = result.user;
-                window.isRealAuth = true;
-                updateAuthUI(true, result.user, true);
-                console.log('Restored real user session:', result.user.email);
+                updateAuthUI(true, result.user);
+                console.log('Restored user session:', result.user.email);
             }
         } catch (error) {
-            console.error('Error checking real auth status:', error);
+            console.error('Error checking auth status:', error);
+        }
+
+        // Helper function to show notifications
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10001;
+                padding: 12px 16px;
+                border-radius: 8px;
+                color: white;
+                font-family: system-ui, -apple-system, sans-serif;
+                font-size: 14px;
+                max-width: 300px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                backdrop-filter: blur(10px);
+                transition: all 0.3s ease;
+                ${type === 'success' ? 'background: rgba(34, 197, 94, 0.9);' : 
+                  type === 'error' ? 'background: rgba(239, 68, 68, 0.9);' : 
+                  'background: rgba(59, 130, 246, 0.9);'}
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, 3000);
         }
 
         // UI update function
@@ -239,10 +488,18 @@ async function injectDraggablePanel() {
             const authSection = panel.querySelector('.sensai-auth-section');
             if (authSection) {
                 if (isLoggedIn && user) {
+                    // Extract user information with fallbacks
+                    const displayName = user.displayName || user.firstName || user.name || user.email?.split('@')[0] || 'User';
+                    const userEmail = user.email || user.primaryEmailAddress?.emailAddress || 'user@example.com';
+                    const avatarLetter = displayName[0]?.toUpperCase() || userEmail[0]?.toUpperCase() || 'U';
+                    const photoURL = user.photoURL || `https://placehold.co/32x32/4F46E5/FFFFFF?text=${avatarLetter}`;
+                    
+                    console.log('Updating UI with user:', { displayName, userEmail, photoURL, originalUser: user });
+                    
                     authSection.innerHTML = `
                         <div class="sensai-user-info">
-                            <img src="${user.photoURL}" alt="Profile" class="sensai-user-avatar">
-                            <span class="sensai-user-name">${user.displayName}</span>
+                            <img src="${photoURL}" alt="Profile" class="sensai-user-avatar">
+                            <span class="sensai-user-name">${displayName}</span>
                             <button class="sensai-signout-btn" title="Sign Out">Sign Out</button>
                         </div>
                     `;
@@ -373,27 +630,28 @@ async function injectDraggablePanel() {
         const codeBtn = panel.querySelector('.sensai-code-btn');
         const hintBtn = panel.querySelector('.sensai-hint-btn');
 
-        async function getAIResponse(action) {
+                async function getAIResponse(action) {
             try {
                 const problemInfo = extractProblemInfo();
                 console.log('Problem info:', problemInfo);
 
-                const response = await fetch('http://localhost:8000/assist', {
-                        method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                        body: JSON.stringify({
+                // Use centralized backend through background script
+                const result = await chrome.runtime.sendMessage({
+                    action: 'getAIAssistance',
+                    data: {
                         action,
                         problem_title: problemInfo.title,
                         problem_description: problemInfo.description,
                         user_code: problemInfo.userCode,
-                        user_id: window.currentUser?.uid || 'anonymous'
-                        })
-                    });
+                        language: 'javascript'
+                    }
+                });
 
-                const data = await response.json();
-                return data.response;
+                if (result.success) {
+                    return result.response;
+                } else {
+                    return `Error: ${result.error || 'Failed to get AI assistance'}`;
+                }
             } catch (error) {
                 console.error('Error getting AI response:', error);
                 return 'Sorry, I encountered an error while processing your request.';

@@ -7,12 +7,17 @@
     "scripting",
     "activeTab",
     "storage",
-    "identity"
+    "identity",
+    "cookies",
+    "tabs"
   ],
   "host_permissions": [
     "https://leetcode.com/*",
     "http://localhost:8000/*",
-    "https://www.googleapis.com/*"
+    "http://localhost:9002/*",
+    "https://www.googleapis.com/*",
+    "https://*.clerk.accounts.dev/*",
+    "https://*.clerk.com/*"
   ],
   "action": {
     "default_title": "SensAI Code Assistant"
@@ -25,9 +30,5 @@
       "resources": ["ui/panel.html", "ui/panel.css"],
       "matches": ["<all_urls>"]
     }
-  ],
-  "oauth2": {
-    "client_id": "333119011480-vam367jgv73pnctsmcske882jjsj3on2.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
-  }
+  ]
 } 
