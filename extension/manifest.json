@@ -4,33 +4,31 @@
   "version": "1.0.0",
   "description": "AI-powered coding hints for LeetCode problems using Google Gemini",
   "permissions": [
+    "scripting",
     "activeTab",
     "storage",
-    "scripting",
+    "identity",
+    "cookies",
     "tabs"
   ],
   "host_permissions": [
     "https://leetcode.com/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://localhost:9002/*",
+    "https://www.googleapis.com/*",
+    "https://*.clerk.accounts.dev/*",
+    "https://*.clerk.com/*"
   ],
   "action": {
     "default_title": "SensAI Code Assistant"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://leetcode.com/problems/*"],
-      "js": ["content/content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {
-      "resources": ["ui/*"],
-      "matches": ["https://leetcode.com/*"]
+      "resources": ["ui/panel.html", "ui/panel.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 } 
