@@ -169,4 +169,189 @@
 
 .sensai-send-btn svg {
     display: block;
+}
+
+/* Authentication Section Styles */
+.sensai-auth-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.sensai-signin-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #4285f4;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+    justify-content: center;
+}
+
+.sensai-signin-btn:hover {
+    background: #3367d6;
+}
+
+.sensai-signin-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.sensai-user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+}
+
+.sensai-user-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sensai-user-name {
+    font-size: 0.9rem;
+    color: #fff;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sensai-signout-btn {
+    background: #dc3545;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.sensai-signout-btn:hover {
+    background: #c82333;
+}
+
+/* Progress Section Styles */
+.sensai-progress-section {
+    margin-bottom: 16px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    border: 1px solid #333;
+    overflow: hidden;
+}
+
+.sensai-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: #222;
+    border-bottom: 1px solid #333;
+    cursor: pointer;
+}
+
+.sensai-progress-header span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #FFB84D;
+}
+
+.sensai-progress-toggle {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+}
+
+.sensai-progress-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.sensai-progress-content {
+    padding: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.sensai-stats {
+    display: flex;
+    gap: 16px;
+    justify-content: space-around;
+}
+
+.sensai-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.sensai-stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #FFB84D;
+    line-height: 1;
+}
+
+.sensai-stat-label {
+    font-size: 0.8rem;
+    color: #ccc;
+    margin-top: 4px;
+}
+
+/* Progress list styles */
+.sensai-progress-list {
+    margin-top: 12px;
+}
+
+.sensai-progress-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #333;
+}
+
+.sensai-progress-item:last-child {
+    border-bottom: none;
+}
+
+.sensai-progress-item-title {
+    font-size: 0.8rem;
+    color: #fff;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sensai-progress-item-status {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+}
+
+.sensai-progress-item-status.completed {
+    background: #28a745;
+    color: white;
+}
+
+.sensai-progress-item-status.in-progress {
+    background: #ffc107;
+    color: black;
 } 

@@ -1,125 +1,198 @@
-# SensAI - LeetCode Learning Assistant
+# SensAI - Code Learning Assistant
 
-A Chrome extension powered by Google's Gemini API to help you learn and solve LeetCode problems more effectively.
-<img width="1705" alt="image" src="https://github.com/user-attachments/assets/9e4bc5b4-5af5-4531-b658-c5d20066385f" />
+An AI-powered Chrome extension that provides intelligent coding hints and solutions for LeetCode problems using Google Gemini.
 
 ## Features
 
-- **Next Step Mode**: Get step-by-step guidance on how to solve the current problem
-- **Hint Mode**: Receive helpful hints without complete solutions
-- **Multi-Language Support**: Works with:
-  - Python
-  - JavaScript
-  - Java
-  - C++
-## Website to Install
+### 🤖 AI-Powered Assistance
+- **Smart Hints**: Get contextual hints to guide your problem-solving approach
+- **Code Generation**: Receive code snippets to advance your solution
+- **Intelligent Responses**: Powered by Google Gemini for accurate and helpful assistance
 
-<img width="618" alt="image" src="https://github.com/user-attachments/assets/ed683c3f-6170-4786-9ead-5963fa9a0545" />
+### 🔐 User Authentication
+- **Google Sign-In**: Secure authentication using Chrome Identity API
+- **User Profiles**: Personalized experience with your Google account
+- **Session Persistence**: Stay logged in across browser sessions
+
+### 🎯 LeetCode Integration
+- **Seamless Integration**: Works directly on LeetCode problem pages
+- **Code Extraction**: Automatically extracts your current code
+- **Problem Detection**: Identifies the current problem you're working on
+- **Draggable Panel**: Convenient floating interface that doesn't interfere with your coding
 
 ## Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/SensAI.git
-cd SensAI
-```
+### Prerequisites
+- Google Chrome browser
+- Google Cloud Project with OAuth 2.0 configured for Chrome extensions
 
-2. Set up the backend:
-```bash
-cd backend
-pip install -r requirements.txt
-```
+### Setup Steps
 
-3. Configure your Gemini API key:
-   - Create a `.env` file in the backend directory
-   - Add your API key: `GEMINI_API_KEY=your_api_key_here`
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd SensAI
+   ```
 
-4. Load the extension in Chrome:
+2. **Set up Google OAuth**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create or select a project
+   - Enable the Google+ API
+   - Create OAuth 2.0 Client ID for Chrome extension
+   - Add your extension ID to authorized JavaScript origins
+   - Update `extension/manifest.json` with your client ID
+
+3. **Set up the backend**
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   export GOOGLE_API_KEY="your-gemini-api-key"
+   python server.py
+   ```
+
+4. **Install the Chrome extension**
    - Open Chrome and go to `chrome://extensions/`
    - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select the `extension` directory from this project
+   - Click "Load unpacked" and select the `extension` folder
+   - The SensAI icon should appear in your Chrome toolbar
 
 ## Usage
 
-1. Visit any LeetCode problem page
-2. Click the SensAI extension icon
-3. Select your preferred mode:
-   - "Next Step" for guided solution steps
-   - "Get Hint" for subtle hints
-4. Choose your programming language
-5. Click "Get Assistance"
+### Getting Started
+1. **Navigate to LeetCode**: Go to any LeetCode problem page (e.g., https://leetcode.com/problems/two-sum/)
+2. **Open SensAI**: Click the SensAI icon in your Chrome toolbar
+3. **Sign In**: Click "Sign in with Google" to authenticate
+4. **Get Assistance**: Use the "Get Hint" or "Get Code" buttons for AI-powered help
 
-## Project Structure
+### Features Overview
+- **Draggable Panel**: Move the panel anywhere on the page by dragging the header
+- **Minimize/Close**: Use the minimize (▼) or close (×) buttons to manage the panel
+- **AI Assistance**: Get contextual hints or code solutions based on your current problem
+- **User Account**: Your authentication persists across browser sessions
 
+## Architecture
+
+### Frontend (Chrome Extension)
+- **Manifest V3**: Modern Chrome extension architecture
+- **Content Scripts**: Interact with LeetCode pages
+- **Background Service Worker**: Handle authentication and API calls
+- **Chrome Identity API**: Secure OAuth 2.0 authentication
+
+### Backend (FastAPI)
+- **Google Gemini Integration**: AI-powered responses
+- **Problem Analysis**: Intelligent code and hint generation
+- **RESTful API**: Clean endpoints for extension communication
+
+### Authentication Flow
 ```
-SensAI/
-├── backend/
-│   ├── server.py         # Flask server handling Gemini API requests
-│   └── requirements.txt  # Python dependencies
-├── extension/
-│   ├── manifest.json     # Extension configuration
-│   ├── popup/
-│   │   ├── popup.html   # Extension popup interface
-│   │   ├── styles.css   # Popup styling
-│   │   └── script.js    # Popup functionality
-│   └── content/
-│       └── content.js   # LeetCode page interaction
-└── README.md
+User clicks "Sign in" → Chrome Identity API → Google OAuth → Access Token → User Info API → Persistent Storage
 ```
 
-## Backend API
+## API Endpoints
 
-The backend server provides two main endpoints:
+### POST `/assist`
+Generate AI assistance for coding problems.
 
-- `/next_code`: Generates the next logical step in solving the problem
-- `/hint`: Provides a helpful hint without giving away the solution
+**Request Body:**
+```json
+{
+  "action": "hint" | "code",
+  "problem_title": "Two Sum",
+  "problem_description": "Given an array of integers...",
+  "user_code": "def twoSum(self, nums, target):",
+  "user_id": "google-user-id"
+}
+```
+
+**Response:**
+```json
+{
+  "response": "Try using a hash map to store the numbers you've seen..."
+}
+```
 
 ## Development
 
-### Backend Requirements
-- Python 3.8+
-- Flask
-- google-generativeai
-- python-dotenv
+### Project Structure
+```
+SensAI/
+├── extension/
+│   ├── manifest.json          # Extension configuration
+│   ├── background.js          # Service worker with auth logic
+│   ├── content/
+│   │   └── content.js         # LeetCode page integration
+│   └── ui/
+│       ├── panel.html         # Main UI template
+│       └── panel.css          # Styling
+├── backend/
+│   ├── server.py              # FastAPI server
+│   └── requirements.txt       # Python dependencies
+└── README.md
+```
 
-### Extension Development
-- The extension uses vanilla JavaScript
-- Styling follows a dark theme with orange accents
-- Uses Chrome's Extension Manifest V3
+### Authentication Implementation
+- **Chrome Identity API**: Official Chrome extension OAuth
+- **Message Passing**: Communication between content script and background
+- **Token Management**: Automatic token refresh and storage
+- **User Sessions**: Persistent login across browser restarts
 
-## Error Handling
+## Configuration
 
-The extension includes robust error handling for:
-- API connection issues
-- Code extraction failures
-- Invalid responses
-- Rate limiting
+### Environment Variables
+```bash
+# Backend
+GOOGLE_API_KEY=your-gemini-api-key
+
+# Chrome Extension (manifest.json)
+CLIENT_ID=your-oauth-client-id.apps.googleusercontent.com
+```
+
+### OAuth Setup
+1. Create OAuth 2.0 Client ID in Google Cloud Console
+2. Set application type to "Chrome extension"
+3. Add your extension ID to authorized origins
+4. Update manifest.json with your client ID
 
 ## Security
 
-- API keys are stored server-side only
-- No sensitive data is stored in the extension
-- All API calls are made through the backend server
+- **No Client Secrets**: Chrome Identity API handles OAuth securely
+- **Token Storage**: Uses Chrome's secure storage APIs
+- **HTTPS Only**: All API communication over secure connections
+- **Minimal Permissions**: Extension requests only necessary permissions
+
+## Troubleshooting
+
+### Extension Won't Load
+- Check for JSON syntax errors in `manifest.json`
+- Verify all required permissions are included
+- Check Chrome Developer Tools for error messages
+
+### Authentication Fails
+- Verify OAuth client ID is correct in manifest
+- Ensure extension ID is added to Google Cloud Console
+- Check that Google+ API is enabled
+
+### Backend Connection Issues
+- Ensure FastAPI server is running on `http://localhost:8000`
+- Check CORS settings if accessing from different domain
+- Verify Google API key is set and valid
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## Roadmap
 
-- Google's Gemini API for powering the AI assistance
-- LeetCode for providing the platform for coding practice
-- The open-source community for various tools and libraries used
-
-## Support
-
-For issues, questions, or contributions, please open an issue in the GitHub repository.
+- [ ] Dark mode support
+- [ ] Multiple programming language support
+- [ ] Advanced analytics dashboard
+- [ ] Problem recommendation system
+- [ ] Collaborative features

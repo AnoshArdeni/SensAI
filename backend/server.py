@@ -1,11 +1,14 @@
-from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 import json
 import sys
 from hint_generator import HintGenerator
+import traceback
+from typing import Optional, List
+from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -35,6 +38,26 @@ class ProcessRequest(BaseModel):
     mode: str  # "code" or "hint"
     use_evaluation: bool = False  # Whether to use GPT evaluation (default: False for speed)
     max_retries: int = None  # Override default retry count (None = use default based on use_evaluation)
+    user_id: Optional[str] = None
+
+class UserProgress(BaseModel):
+    user_id: str
+    problem_id: str
+    problem_title: str
+    problem_url: str
+    completed: bool = False
+    attempts: int = 0
+    hints_used: int = 0
+    time_spent: int = 0
+    last_attempted: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+class UserStats(BaseModel):
+    user_id: str
+    total_problems_attempted: int
+    total_problems_completed: int
+    total_hints_used: int
+    total_time_spent: int
 
 @app.post("/process")
 async def process_request(request: ProcessRequest):
@@ -132,10 +155,74 @@ async def process_request(request: ProcessRequest):
             status_code=500,
             detail=error_msg
         )
-
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "pipeline": "Claude + GPT"}
+
+# User progress tracking endpoints
+@app.post("/api/progress/track")
+async def track_progress(progress: UserProgress):
+    """
+    Track user progress on a problem
+    Note: In a real implementation, this would connect to Firebase or another database
+    """
+    try:
+        # Here you would save to your database
+        # For now, we'll just return success
+        return {
+            "success": True,
+            "message": "Progress tracked successfully",
+            "data": progress.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to track progress: {e}")
+
+@app.get("/api/progress/{user_id}")
+async def get_user_progress(user_id: str):
+    """
+    Get all progress for a specific user
+    """
+    try:
+        # Here you would fetch from your database
+        # For now, return mock data
+        mock_progress = [
+            {
+                "problem_id": "two-sum",
+                "problem_title": "Two Sum",
+                "completed": True,
+                "attempts": 2,
+                "hints_used": 1,
+                "last_attempted": datetime.now().isoformat()
+            }
+        ]
+        
+        return {
+            "success": True,
+            "progress": mock_progress
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get progress: {e}")
+
+@app.get("/api/stats/{user_id}")
+async def get_user_stats(user_id: str):
+    """
+    Get user statistics
+    """
+    try:
+        # Here you would calculate from your database
+        mock_stats = {
+            "total_problems_attempted": 5,
+            "total_problems_completed": 3,
+            "total_hints_used": 7,
+            "total_time_spent": 3600  # in seconds
+        }
+        
+        return {
+            "success": True,
+            "stats": mock_stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}")
 
 if __name__ == "__main__":
     import uvicorn

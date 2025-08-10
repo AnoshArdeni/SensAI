@@ -203,4 +203,94 @@ panelObserver.observe(document.body, {
 });
 
 // Log when content script is loaded
+<<<<<<< Updated upstream
 console.log('SensAI: Content script ready for LeetCode integration'); 
+=======
+console.log('SensAI: Content script ready for LeetCode integration');
+
+// Problem completion detection
+let lastSubmissionTime = 0;
+let isMonitoringSubmission = false;
+
+// Monitor for successful submissions
+function monitorSubmissions() {
+    // Check for success messages or acceptance indicators
+    const successSelectors = [
+        '[data-cy="submission-success"]',
+        '.success-message',
+        '[class*="success"]',
+        '[class*="accepted"]',
+        '.text-green-600',
+        '.text-success'
+    ];
+    
+    for (const selector of successSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.textContent.toLowerCase().includes('accepted')) {
+            const currentTime = Date.now();
+            if (currentTime - lastSubmissionTime > 5000) { // Prevent duplicate tracking
+                lastSubmissionTime = currentTime;
+                trackProblemCompletion();
+            }
+            break;
+        }
+    }
+}
+
+// Track when a problem is completed
+async function trackProblemCompletion() {
+    try {
+        const problemInfo = extractProblemInfo();
+        if (problemInfo.success) {
+            const problemId = extractProblemId(window.location.href);
+            
+            // Send completion event to background script
+            chrome.runtime.sendMessage({
+                action: 'problemCompleted',
+                data: {
+                    problemId: problemId,
+                    title: problemInfo.title,
+                    url: window.location.href,
+                    completedAt: new Date().toISOString()
+                }
+            });
+            
+            console.log('Problem completion tracked:', problemInfo.title);
+        }
+    } catch (error) {
+        console.error('Error tracking problem completion:', error);
+    }
+}
+
+function extractProblemId(url) {
+    try {
+        const urlParts = url.split('/');
+        const problemSlug = urlParts[urlParts.length - 1];
+        return problemSlug || 'unknown';
+    } catch (error) {
+        return 'unknown';
+    }
+}
+
+// Start monitoring for submissions
+setInterval(monitorSubmissions, 2000);
+
+// Listen for completion events from LeetCode
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                const text = node.textContent || '';
+                if (text.toLowerCase().includes('accepted') || text.toLowerCase().includes('success')) {
+                    setTimeout(trackProblemCompletion, 1000);
+                }
+            }
+        });
+    });
+});
+
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
+>>>>>>> Stashed changes
