@@ -3,12 +3,24 @@
   "version": "1.0.0",
   "description": "Centralized backend for SensAI website and extension",
   "main": "dist/server.js",
+  "author": "SensAI Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "production": "NODE_ENV=production node dist/server.js",
     "lint": "eslint src/**/*.ts",
-    "type-check": "tsc --noEmit"
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "postbuild": "cp package.json dist/",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
     "@clerk/express": "^1.7.17",

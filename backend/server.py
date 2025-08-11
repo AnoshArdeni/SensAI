@@ -19,7 +19,13 @@ app = FastAPI(title="SensAI Code Learning Assistant")
 # Add CORS middleware to allow requests from the extension
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://leetcode.com", "https://*.leetcode.com"],
+    allow_origins=[
+        "https://leetcode.com", 
+        "https://*.leetcode.com",
+        "http://localhost:8000",  # Node.js backend
+        "http://localhost:9002",  # Website
+        "chrome-extension://*"    # Chrome extensions
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -29,6 +35,7 @@ app.add_middleware(
 try:
     hint_generator = HintGenerator()
 except Exception as e:
+
     print(f"Error: HintGenerator initialization failed: {e}")
     print("Make sure CLAUDE_API_KEY and OPENAI_API_KEY are set in .env file.")
     sys.exit(1)
@@ -226,4 +233,4 @@ async def get_user_stats(user_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8001) 
