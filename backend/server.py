@@ -82,11 +82,42 @@ Do NOT:
 # Initialize FastAPI app
 app = FastAPI(title="Code Learning Assistant")
 
+<<<<<<< Updated upstream
 class AssistRequest(BaseModel):
     problem_name: str
     code_so_far: str = ""
     language: str = "python"
     mode: str  # "next_code" or "hint"
+=======
+# Add CORS middleware to allow requests from the extension and Node.js backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://leetcode.com", 
+        "https://*.leetcode.com",
+        "http://localhost:8000",  # Node.js backend
+        "http://localhost:9002",  # Website
+        "chrome-extension://*"    # Chrome extensions
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+# Initialize HintGenerator for the Claude + GPT pipeline
+try:
+    hint_generator = HintGenerator()
+except Exception as e:
+    print(f"Error: HintGenerator initialization failed: {e}")
+    print("Make sure CLAUDE_API_KEY and OPENAI_API_KEY are set in .env file.")
+    sys.exit(1)
+
+class ProcessRequest(BaseModel):
+    problem: dict  # Contains title, description, code from extension
+    mode: str  # "code" or "hint"
+    use_evaluation: bool = False  # Whether to use GPT evaluation (default: False for speed)
+    max_retries: int = None  # Override default retry count (None = use default based on use_evaluation)
+>>>>>>> Stashed changes
     user_id: Optional[str] = None
 
 class UserProgress(BaseModel):
@@ -292,4 +323,4 @@ async def get_user_stats(user_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8001) 

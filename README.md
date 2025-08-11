@@ -7,7 +7,7 @@ An AI-powered Chrome extension that provides intelligent coding hints and soluti
 ### 🤖 AI-Powered Assistance
 - **Smart Hints**: Get contextual hints to guide your problem-solving approach
 - **Code Generation**: Receive code snippets to advance your solution
-- **Intelligent Responses**: Powered by Google Gemini for accurate and helpful assistance
+- **Advanced AI Pipeline**: Claude + GPT evaluation with Gemini fallback for maximum quality
 
 ### 🔐 User Authentication
 - **Google Sign-In**: Secure authentication using Chrome Identity API
@@ -42,12 +42,28 @@ An AI-powered Chrome extension that provides intelligent coding hints and soluti
    - Add your extension ID to authorized JavaScript origins
    - Update `extension/manifest.json` with your client ID
 
-3. **Set up the backend**
+3. **Set up the backends**
+   
+   **Quick Start:**
    ```bash
+   ./start-backends.sh
+   ```
+   
+   **Manual Setup:**
+   ```bash
+   # Python Backend (AI)
    cd backend
    pip install -r requirements.txt
-   export GOOGLE_API_KEY="your-gemini-api-key"
+   cp env.example .env
+   # Edit .env with your Claude/OpenAI API keys
    python server.py
+   
+   # Node.js Backend (Auth)
+   cd backend-clerk
+   npm install
+   cp env.example .env
+   # Edit .env with your Clerk/Gemini API keys
+   npm run dev
    ```
 
 4. **Install the Chrome extension**

@@ -39,10 +39,72 @@ router.post('/assist', requireAuth, async (req, res) => {
 
     console.log(`AI assist request from user ${userId}: ${action} for "${problem_title}"`);
 
-    let prompt = '';
-    
-    if (action === 'hint') {
-      prompt = `
+    // Route to Python backend for advanced AI processing
+    try {
+      const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8001';
+      
+      const pythonRequest = {
+        problem: {
+          title: problem_title,
+          description: problem_description,
+          code: user_code || ''
+        },
+        mode: action === 'hint' ? 'hint' : 'code',
+        use_evaluation: process.env.USE_AI_EVALUATION === 'true' || false,
+        max_retries: process.env.AI_MAX_RETRIES ? parseInt(process.env.AI_MAX_RETRIES) : 1,
+        user_id: userId
+      };
+
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const pythonResponse = await fetch(`${pythonBackendUrl}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pythonRequest),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!pythonResponse.ok) {
+        throw new Error(`Python backend responded with status: ${pythonResponse.status}`);
+      }
+
+      const pythonResult = await pythonResponse.json() as any;
+
+      if (pythonResult.success) {
+        // Log usage for analytics
+        console.log(`AI response via Python backend for user ${userId}, action: ${action}, pipeline: ${pythonResult.pipeline}`);
+
+        res.json({
+          success: true,
+          response: pythonResult.response,
+          metadata: {
+            action,
+            problem_title,
+            user_id: userId,
+            timestamp: new Date().toISOString(),
+            pipeline: pythonResult.pipeline,
+            evaluation_score: pythonResult.evaluation_score,
+            attempts: pythonResult.attempts
+          }
+        });
+      } else {
+        throw new Error(pythonResult.detail || 'Python backend processing failed');
+      }
+
+    } catch (pythonError: any) {
+      console.warn(`Python backend failed, falling back to Gemini: ${pythonError.message || pythonError}`);
+      
+      // Fallback to basic Gemini if Python backend is unavailable
+      let prompt = '';
+      
+      if (action === 'hint') {
+        prompt = `
 You are an AI coding tutor helping students learn problem-solving skills. 
 
 Problem: ${problem_title}
@@ -57,8 +119,8 @@ Provide a helpful hint that guides the student toward the solution WITHOUT givin
 
 Keep your hint concise (2-3 sentences) and educational.
 `;
-    } else {
-      prompt = `
+      } else {
+        prompt = `
 You are an AI coding assistant helping with LeetCode-style problems.
 
 Problem: ${problem_title}
@@ -73,24 +135,26 @@ Provide a working code solution with:
 
 Format your response with proper code blocks and explanations.
 `;
-    }
-
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
-
-    // Log usage for analytics (you could store this in a database)
-    console.log(`AI response generated for user ${userId}, action: ${action}, length: ${response.length}`);
-
-    res.json({
-      success: true,
-      response,
-      metadata: {
-        action,
-        problem_title,
-        user_id: userId,
-        timestamp: new Date().toISOString()
       }
-    });
+
+      const result = await model.generateContent(prompt);
+      const response = result.response.text();
+
+      console.log(`AI response generated via Gemini fallback for user ${userId}, action: ${action}`);
+
+      res.json({
+        success: true,
+        response,
+        metadata: {
+          action,
+          problem_title,
+          user_id: userId,
+          timestamp: new Date().toISOString(),
+          pipeline: 'Gemini (fallback)',
+          fallback_reason: pythonError.message || 'Python backend unavailable'
+        }
+      });
+    }
 
   } catch (error) {
     console.error('AI assist error:', error);

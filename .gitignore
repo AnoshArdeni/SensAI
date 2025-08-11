@@ -1,7 +1,29 @@
-# Environment variables
+# ===================================
+# SensAI - Production-Ready .gitignore
+# ===================================
+
+# Environment Variables (NEVER commit these!)
 .env
 .env.local
+.env.development
+.env.production
 .env.*.local
+*.env
+
+# Node.js Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build Outputs
+dist/
+build/
+.next/
+.turbo/
+.vercel/
+.netlify/
 
 # Python
 __pycache__/
@@ -9,9 +31,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -26,21 +46,25 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Python Virtual Environments
 venv/
 env/
 ENV/
 env.bak/
 venv.bak/
+.venv/
+sensei/
 
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.vim/
+.emacs.d/
 
-# OS
+# OS Generated Files
 .DS_Store
 .DS_Store?
 ._*
@@ -48,15 +72,102 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Logs
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Chrome extension
+# Runtime Data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Chrome Extension
 *.crx
 *.pem
+*.zip
 
-# Temporary files
+# Temporary Files
 *.tmp
-*.temp 
+*.temp
+.cache/
+.parcel-cache/
+
+# Testing
+coverage/
+.coverage
+.pytest_cache/
+.jest/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Security & API Keys
+secrets/
+config/local.js
+config/production.js
+
+# Package Manager Lock Files (choose one)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Editor Backup Files
+*~
+.#*
+\#*#
+.*.swp
+.*.swo
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional ESLint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Local History for Visual Studio Code
+.history/ 
