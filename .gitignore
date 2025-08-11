@@ -95,7 +95,7 @@ pids/
 
 # Temporary Files
 *.tmp
-*.temp
+==*.temp
 .cache/
 .parcel-cache/
 
@@ -171,3 +171,5 @@ config/production.js
 
 # Local History for Visual Studio Code
 .history/ 
+*.temp 
+node_modules/
