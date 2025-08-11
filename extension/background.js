@@ -635,18 +635,29 @@ async function injectDraggablePanel() {
                 const problemInfo = extractProblemInfo();
                 console.log('Problem info:', problemInfo);
 
-                // Use centralized backend through background script
-                const result = await chrome.runtime.sendMessage({
-                    action: 'getAIAssistance',
-                    data: {
-                        action,
-                        problem_title: problemInfo.title,
-                        problem_description: problemInfo.description,
-                        user_code: problemInfo.userCode,
-                        language: 'javascript'
-                    }
+                // Call the new /process endpoint
+                const response = await fetch('http://localhost:8000/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        problem: {
+                            title: problemInfo.title,
+                            description: problemInfo.description,
+                            code: problemInfo.userCode
+                        },
+                        mode: action, // 'code' or 'hint'
+                        use_evaluation: false // Default to false for speed
+                    })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
                 if (result.success) {
                     return result.response;
                 } else {
@@ -659,79 +670,495 @@ async function injectDraggablePanel() {
         }
 
         function extractProblemInfo() {
-            const title = document.querySelector('[data-cy="question-title"]')?.textContent?.trim() || 
-                         document.querySelector('.css-v3d350')?.textContent?.trim() || 
-                         'Unknown Problem';
+            // Try to get problem title
+            let title = '';
+            const titleSelectors = [
+                '[data-cy="question-title"]',
+                '.mr-2.text-label-1',
+                'h1',
+                '[class*="title"]',
+                '.text-title-large',
+                '.css-v3d350'
+            ];
             
-            const description = document.querySelector('[data-track-load="description_content"]')?.textContent?.trim() || 
-                               document.querySelector('.content__u3I1 .question-content')?.textContent?.trim() || 
-                               'No description found';
+            for (const selector of titleSelectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    title = element.textContent.trim();
+                    break;
+                }
+            }
             
-            const codeEditor = document.querySelector('.monaco-editor textarea') || 
-                              document.querySelector('.CodeMirror-code') || 
-                              document.querySelector('#editor');
+            // Try to get problem description
+            let description = '';
+            const descriptionSelectors = [
+                '[data-cy="question-content"]',
+                '.question-content__JfgR',
+                '[class*="description"]',
+                '[class*="content"]',
+                '.description__24sA',
+                '[data-track-load="description_content"]',
+                '.content__u3I1 .question-content'
+            ];
             
+            for (const selector of descriptionSelectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    description = element.textContent.trim();
+                    description = description.replace(/\s+/g, ' ').substring(0, 500);
+                    break;
+                }
+            }
+            
+            // Try to get current code from the editor - multiple methods
             let userCode = '';
-            if (codeEditor) {
-                userCode = codeEditor.value || codeEditor.textContent || '';
+            
+            // Method 1: Try to get from Monaco editor's content
+            const monacoEditor = document.querySelector('.monaco-editor');
+            if (monacoEditor) {
+                const lines = monacoEditor.querySelectorAll('.view-line');
+                userCode = Array.from(lines)
+                    .map(line => line.textContent)
+                    .join('\n');
             }
 
-            return { title, description, userCode };
+            // Method 2: Fallback - try to get from the textarea if visible
+            if (!userCode) {
+                const textarea = document.querySelector('textarea.CodeMirror-line');
+                if (textarea) {
+                    userCode = textarea.value;
+                }
+            }
+
+            // Method 3: Another fallback - try getting from pre-filled template
+            if (!userCode) {
+                const codeBlock = document.querySelector('[data-cy="code-content"]');
+                if (codeBlock) {
+                    userCode = codeBlock.textContent;
+                }
+            }
+
+            // Clean up the code
+            userCode = userCode.trim()
+                .replace(/^\s*\n/gm, '\n') // Remove empty lines
+                .replace(/\n{3,}/g, '\n\n'); // Reduce multiple newlines to max 2
+
+            // Fallback: extract from URL if title is not found
+            if (!title) {
+                const urlParts = window.location.pathname.split('/');
+                const slug = urlParts[urlParts.length - 1];
+                if (slug) {
+                    title = slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                }
+            }
+
+            return { 
+                title: title || 'Unknown Problem', 
+                description: description || 'Problem description not available',
+                userCode: userCode || ''
+            };
         }
 
-        // Button event listeners
-        codeBtn.addEventListener('click', async () => {
-            codeBtn.textContent = 'Getting code...';
-            codeBtn.disabled = true;
+        // Mode selection variables
+        let selectedMode = 'hint'; // Default mode
+
+        // Button event listeners for mode selection
+        codeBtn.addEventListener('click', () => {
+            selectedMode = 'code';
+            codeBtn.classList.add('selected');
+            hintBtn.classList.remove('selected');
+        });
+
+        hintBtn.addEventListener('click', () => {
+            selectedMode = 'hint';
+            hintBtn.classList.add('selected');
+            codeBtn.classList.remove('selected');
+        });
+
+        // Send button functionality
+        const sendBtn = panel.querySelector('.sensai-send-btn');
+        sendBtn.addEventListener('click', async () => {
+            const displayElement = panel.querySelector('.sensai-display-text');
+            const displayContainer = panel.querySelector('.sensai-panel-display');
+            
+            // Show loading state
+            displayElement.textContent = selectedMode === 'code' ? 'Getting code...' : 'Getting hint...';
+            sendBtn.disabled = true;
 
             try {
-                const response = await getAIResponse('code');
-                showResponse(response, 'Code Solution');
+                const response = await getAIResponse(selectedMode);
+                
+                if (selectedMode === 'code') {
+                    // Display code with syntax highlighting
+                    displayCodeResponse(displayContainer, response, 'code');
+                } else {
+                    // Display hint as formatted comment
+                    const hintAsComment = `# ${response}`;
+                    displayCodeResponse(displayContainer, hintAsComment, 'hint');
+                }
+            } catch (error) {
+                console.error('Error getting AI response:', error);
+                displayElement.textContent = 'Error: Could not get response. Check if server is running.';
             } finally {
-                codeBtn.textContent = 'Get Code';
-                codeBtn.disabled = false;
+                sendBtn.disabled = false;
             }
         });
 
-        hintBtn.addEventListener('click', async () => {
-            hintBtn.textContent = 'Getting hint...';
-            hintBtn.disabled = true;
-
-            try {
-                const response = await getAIResponse('hint');
-                showResponse(response, 'Hint');
-            } finally {
-                hintBtn.textContent = 'Get Hint';
-                hintBtn.disabled = false;
+                // Copy button functionality
+        const copyBtn = panel.querySelector('.sensai-action-btn[title="Copy"]');
+        copyBtn.addEventListener('click', async () => {
+            let textToCopy = '';
+            
+            // Check if we have a code block
+            const codeBlock = panel.querySelector('.sensai-code-content code');
+            if (codeBlock) {
+                // Extract plain text from highlighted code
+                textToCopy = codeBlock.textContent;
+                
+                // If it's a hint (starts with #), remove the comment prefix
+                const typeLabel = panel.querySelector('.sensai-code-type');
+                if (typeLabel && typeLabel.textContent === 'Hint' && textToCopy.startsWith('# ')) {
+                    textToCopy = textToCopy.substring(2); // Remove "# " prefix
+                }
+            } else {
+                // Fallback to regular display text
+                const displayElement = panel.querySelector('.sensai-display-text');
+                textToCopy = displayElement.textContent;
             }
-        });
-
-        function showResponse(response, title) {
-            const responseContainer = panel.querySelector('.sensai-response');
-            responseContainer.innerHTML = `
-                <div class="sensai-response-header">
-                    <strong>${title}</strong>
-                    <button class="sensai-copy-btn" title="Copy to clipboard">📋</button>
-                </div>
-                <div class="sensai-response-content">${response}</div>
-            `;
-            responseContainer.style.display = 'block';
-
-            // Copy functionality
-            const copyBtn = responseContainer.querySelector('.sensai-copy-btn');
-            copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(response).then(() => {
-                    copyBtn.textContent = '✓';
+            
+            if (textToCopy && textToCopy !== 'Ready' && !textToCopy.includes('Getting')) {
+                try {
+                    await navigator.clipboard.writeText(textToCopy);
+                    
+                    // Visual feedback
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    copyBtn.style.backgroundColor = '#4CAF50';
+                    
                     setTimeout(() => {
-                        copyBtn.textContent = '📋';
+                        copyBtn.textContent = originalText;
+                        copyBtn.style.backgroundColor = '';
+                    }, 2000);
+                } catch (error) {
+                    console.error('Failed to copy text:', error);
+                    copyBtn.textContent = 'Failed';
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                    }, 2000);
+                }
+            } else {
+                // Nothing to copy or still loading
+                copyBtn.textContent = 'Nothing to copy';
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                }, 1500);
+            }
+        });
+
+        // Import button functionality
+        const importBtn = panel.querySelector('.sensai-action-btn[title="Import"]');
+        importBtn.addEventListener('click', () => {
+            let responseText = '';
+            
+            // Check if we have a code block
+            const codeBlock = panel.querySelector('.sensai-code-content code');
+            if (codeBlock) {
+                // Extract plain text from highlighted code
+                responseText = codeBlock.textContent;
+            } else {
+                // Fallback to regular display text
+                const displayElement = panel.querySelector('.sensai-display-text');
+                responseText = displayElement.textContent;
+            }
+            
+            if (responseText && responseText !== 'Ready' && !responseText.includes('Getting')) {
+                if (selectedMode === 'code') {
+                    // For code, insert directly into editor
+                    insertCodeIntoEditor(responseText);
+                } else if (selectedMode === 'hint') {
+                    // For hints, import as comment (keep the # prefix for import)
+                    insertCodeIntoEditor(responseText);
+                }
+            } else {
+                importBtn.textContent = 'Nothing to import';
+                setTimeout(() => {
+                    importBtn.textContent = 'Import';
+                }, 1500);
+            }
+        });
+
+                // Helper function to insert code into LeetCode editor
+        function insertCodeIntoEditor(code) {
+            try {
+                // Strip indentation - just insert the raw line of code
+                const cleanCode = stripIndentation(code);
+                
+                // Method 1: Try Monaco Editor (most common)
+                const monacoEditor = document.querySelector('.monaco-editor');
+                if (monacoEditor) {
+                    // Try to insert at cursor position
+                    if (insertCodeAtCursor(monacoEditor, cleanCode)) {
+                        showImportSuccess();
+                        return;
+                    }
+                }
+
+                // Method 2: Try CodeMirror (fallback)
+                const codeMirror = document.querySelector('.CodeMirror');
+                if (codeMirror && codeMirror.CodeMirror) {
+                    // Insert at cursor or append
+                    const cursor = codeMirror.CodeMirror.getCursor();
+                    codeMirror.CodeMirror.replaceRange(cleanCode, cursor);
+                    showImportSuccess();
+                    return;
+                }
+
+                // Method 3: Alternative approach using clipboard
+                navigator.clipboard.writeText(cleanCode).then(() => {
+                    importBtn.textContent = 'Copied to clipboard';
+                    setTimeout(() => {
+                        importBtn.textContent = 'Import';
                     }, 2000);
                 });
-            });
+
+            } catch (error) {
+                console.error('Failed to insert code into editor:', error);
+                importBtn.textContent = 'Import failed';
+                setTimeout(() => {
+                    importBtn.textContent = 'Import';
+                }, 2000);
+            }
         }
+
+
+
+        // Insert code at cursor position in Monaco editor
+        function insertCodeAtCursor(monacoEditor, code) {
+            try {
+                const textarea = monacoEditor.querySelector('textarea');
+                if (textarea) {
+                    textarea.focus();
+                    
+                    // Get cursor position
+                    const start = textarea.selectionStart;
+                    const end = textarea.selectionEnd;
+                    const currentValue = textarea.value;
+                    
+                    // Insert at cursor position with a newline
+                    const newValue = currentValue.slice(0, start) + '\n' + code + currentValue.slice(end);
+                    
+                    // Trigger input events to update Monaco
+                    textarea.value = newValue;
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                    
+                    // Set cursor after inserted code
+                    const newCursorPos = start + code.length + 1;
+                    textarea.setSelectionRange(newCursorPos, newCursorPos);
+                    
+                    return true;
+                }
+            } catch (error) {
+                console.error('Failed to insert at cursor:', error);
+            }
+            return false;
+        }
+
+        // Show import success feedback
+        function showImportSuccess() {
+            importBtn.textContent = 'Imported!';
+            importBtn.style.backgroundColor = '#4CAF50';
+            setTimeout(() => {
+                importBtn.textContent = 'Import';
+                importBtn.style.backgroundColor = '';
+            }, 2000);
+        }
+
+        // Display code response with syntax highlighting
+        function displayCodeResponse(container, code, type = 'code') {
+            // Strip all leading indentation from the code
+            const strippedCode = stripIndentation(code);
+            
+            // Clear existing content but preserve the original display text element
+            const existingDisplayText = container.querySelector('.sensai-display-text');
+            container.innerHTML = '';
+            
+            // Re-add the display text element (hidden when showing code block)
+            if (existingDisplayText) {
+                existingDisplayText.style.display = 'none';
+                container.appendChild(existingDisplayText);
+            }
+            
+            // Create code block structure
+            const codeBlock = document.createElement('div');
+            codeBlock.className = 'sensai-code-block';
+            
+            // Add metadata header
+            const meta = document.createElement('div');
+            meta.className = 'sensai-code-meta';
+            const typeLabel = type === 'hint' ? 'Hint' : 'Code';
+            meta.innerHTML = `
+                <span class="sensai-code-time">${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+                <span class="sensai-code-type">${typeLabel}</span>
+            `;
+            
+            // Add code content with icon
+            const body = document.createElement('div');
+            body.className = 'sensai-code-body';
+            
+            const icon = document.createElement('div');
+            icon.className = 'sensai-code-icon';
+            
+            // Different icons for hints vs code
+            if (type === 'hint') {
+                icon.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB84D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                `;
+            } else {
+                icon.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB84D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="14" rx="2"/>
+                        <path d="M8 20h8"/>
+                    </svg>
+                `;
+            }
+            
+            const codeContent = document.createElement('pre');
+            codeContent.className = 'sensai-code-content';
+            const codeElement = document.createElement('code');
+            codeElement.innerHTML = highlightPythonCode(strippedCode);
+            codeContent.appendChild(codeElement);
+            
+            body.appendChild(icon);
+            body.appendChild(codeContent);
+            
+            codeBlock.appendChild(meta);
+            codeBlock.appendChild(body);
+            container.appendChild(codeBlock);
+            
+            // Add CSS styles for code blocks
+            addCodeBlockStyles();
+        }
+
+        // Strip all indentation from code
+        function stripIndentation(code) {
+            return code
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join('\n');
+        }
+
+        // Simple Python syntax highlighting
+        function highlightPythonCode(code) {
+            // First escape HTML
+            let highlighted = code
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            
+            // Apply syntax highlighting
+            highlighted = highlighted
+                // Keywords
+                .replace(/\b(def|class|if|else|elif|for|while|try|except|finally|with|import|from|return|yield|break|continue|pass|raise|lambda|and|or|not|in|is|True|False|None)\b/g, '<span class="kw">$1</span>')
+                // Strings (handle escaped quotes)
+                .replace(/(&#39;)(.*?)(&#39;)/g, '<span class="str">$1$2$3</span>')
+                .replace(/(&quot;)(.*?)(&quot;)/g, '<span class="str">$1$2$3</span>')
+                // Comments
+                .replace(/(#.*$)/gm, '<span class="cm">$1</span>')
+                // Numbers
+                .replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>')
+                // Functions (word followed by parentheses)
+                .replace(/(\w+)(\s*\()/g, '<span class="fn">$1</span>$2');
+            
+            return highlighted;
+        }
+
+        // Add CSS styles for code blocks
+        function addCodeBlockStyles() {
+            // Check if styles already added
+            if (document.getElementById('sensai-code-styles')) return;
+            
+            const style = document.createElement('style');
+            style.id = 'sensai-code-styles';
+            style.textContent = `
+                .sensai-code-block {
+                    background: #1e1e1e;
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    margin: 8px 0;
+                    overflow: hidden;
+                    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+                    font-size: 12px;
+                }
+
+                .sensai-code-meta {
+                    background: #2d2d2d;
+                    padding: 6px 12px;
+                    border-bottom: 1px solid #333;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 11px;
+                    color: #888;
+                }
+
+                .sensai-code-type {
+                    color: #FFB84D;
+                    font-weight: 500;
+                }
+
+                .sensai-code-body {
+                    display: flex;
+                    align-items: flex-start;
+                    padding: 8px;
+                    gap: 8px;
+                }
+
+                .sensai-code-icon {
+                    margin-top: 2px;
+                    flex-shrink: 0;
+                }
+
+                .sensai-code-content {
+                    flex: 1;
+                    margin: 0;
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    color: #d4d4d4;
+                    line-height: 1.4;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }
+
+                .sensai-code-content code {
+                    background: none;
+                    padding: 0;
+                    font-family: inherit;
+                }
+
+                /* Syntax highlighting */
+                .sensai-code-content .kw { color: #569cd6; } /* Keywords */
+                .sensai-code-content .str { color: #ce9178; } /* Strings */
+                .sensai-code-content .cm { color: #6a9955; font-style: italic; } /* Comments */
+                .sensai-code-content .num { color: #b5cea8; } /* Numbers */
+                .sensai-code-content .fn { color: #dcdcaa; } /* Functions */
+            `;
+            document.head.appendChild(style);
+        }
+
+
 
         console.log('Panel setup completed successfully');
 
-    } catch (error) {
+        } catch (error) {
         console.error('Failed to inject draggable panel:', error);
         
         // Fallback: Create a simple panel
